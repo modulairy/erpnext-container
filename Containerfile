@@ -67,6 +67,8 @@ RUN useradd -ms /bin/bash frappe \
     && chown -R frappe:frappe /var/lib/nginx \
     && chown -R frappe:frappe /run/nginx.pid
 
+RUN pip install --upgrade frappe-bench
+
 COPY resources/nginx-template.conf /templates/nginx/frappe.conf.template
 COPY resources/nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
 
@@ -107,7 +109,7 @@ RUN bench init \
   --no-backups \
   --skip-redis-config-generation \
   --verbose /home/frappe/frappe-bench
-RUN pip install --upgrade frappe-bench
+
 WORKDIR /home/frappe/frappe-bench  
 RUN echo "{\"webserver_port\":443,\"socketio_port\":9000}" > sites/common_site_config.json
 
@@ -128,15 +130,37 @@ RUN bench get-app --branch $(git ls-remote --tags https://github.com/frappe/help
 
 RUN bench get-app hrms
 RUN bench get-app drive
-RUN bench get-app books
+# RUN bench get-app books
 RUN bench get-app lms
-RUN bench get-app insight
+# RUN bench get-app insight
 RUN bench get-app wiki
-RUN bench get-app drive
-
-
-
-
-
+# RUN bench get-app drive
 
 #   find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+
+FROM base AS erpnext
+
+USER frappe
+
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
+
+WORKDIR /home/frappe/frappe-bench
+
+VOLUME [ \
+  "/home/frappe/frappe-bench/sites", \
+  "/home/frappe/frappe-bench/sites/assets", \
+  "/home/frappe/frappe-bench/logs" \
+]
+
+CMD [ \
+  "/home/frappe/frappe-bench/env/bin/gunicorn", \
+  "--chdir=/home/frappe/frappe-bench/sites", \
+  "--bind=0.0.0.0:8000", \
+  "--threads=4", \
+  "--workers=2", \
+  "--worker-class=gthread", \
+  "--worker-tmp-dir=/dev/shm", \
+  "--timeout=120", \
+  "--preload", \
+  "frappe.app:application" \
+]
