@@ -100,8 +100,12 @@ RUN apt-get update \
 
 USER frappe
 
-ARG FRAPPE_BRANCH=version-15
-ARG FRAPPE_PATH=https://github.com/modulairy/frappe
+# ARG FRAPPE_BRANCH=version-15
+# ARG FRAPPE_PATH=https://github.com/modulairy/frappe
+
+ARG FRAPPE_BRANCH=develop
+ARG FRAPPE_PATH=https://github.com/frappe/frappe
+
 RUN bench init \
   --frappe-branch=${FRAPPE_BRANCH} \
   --frappe-path=${FRAPPE_PATH} \
