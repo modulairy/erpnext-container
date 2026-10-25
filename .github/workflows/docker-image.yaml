@@ -67,6 +67,7 @@ jobs:
             .build/vulnerabilities.json
             .build/sbom.cdx.json
             .build/image-id.txt
+            .build/pdf/
           retention-days: 14
       - name: Upload verified image
         if: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
