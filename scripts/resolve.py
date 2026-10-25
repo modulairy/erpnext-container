@@ -150,16 +150,29 @@ def install_order(rows):
     return ordered
 
 
-def pypi_latest(name, python):
+def pypi_latest(name, python, constraint=''):
     data = json.loads(request(f'https://pypi.org/pypi/{name}/json'))
     for version in sorted(map(Version, data['releases']), reverse=True):
-        if version.is_prerelease or version.is_devrelease:
+        if version.is_prerelease or version.is_devrelease or version not in SpecifierSet(constraint):
             continue
         files = data['releases'][str(version)]
         if any(not f.get('yanked') and Version(python) in SpecifierSet(f.get('requires_python') or '')
                for f in files):
             return str(version)
     raise ValueError(f'No compatible {name}')
+
+
+def security_versions(python):
+    policy = json.loads((Path(__file__).resolve().parents[1]/'security-policy.json').read_text())
+    selected = {'python': {}, 'javascript': {}}
+    for name, constraint in policy['python'].items():
+        selected['python'][name] = pypi_latest(name, python, constraint)
+    for name, constraint in policy['javascript'].items():
+        data = json.loads(request('https://registry.npmjs.org/'+quote(name, safe='')))
+        versions = [v for v in data['versions'] if STABLE.fullmatch(v)
+                    and NpmSpec(constraint).match(NodeVersion(v))]
+        selected['javascript'][name] = max(versions, key=Version)
+    return selected
 
 
 def image_digest(tag):
@@ -234,6 +247,7 @@ def main():
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'erpnext_tag': selected['erpnext']['ref'], 'apps': rows,
             'python': python, 'node': node, 'bench': bench, 'yarn': yarn,
+            'security_overrides': security_versions(python),
             'python_image': image_digest(f'python:{python}-slim-trixie'),
             'node_image': image_digest(f'node:{node}-trixie-slim'),
             'mariadb_image': image_digest('mariadb:11.8'),
