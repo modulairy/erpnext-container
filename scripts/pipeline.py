@@ -31,6 +31,9 @@ def build():
     for key, value in values.items():
         args += ['--build-arg', f'{key}={value}']
     run(args+['.'])
+    inventory = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'cat', IMAGE,
+                                        '/home/frappe/frappe-bench/image-lock.json'])
+    (OUT/'image-lock.json').write_bytes(inventory)
     image_id = subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip()
     (OUT/'image-id.txt').write_text(image_id)
     run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
@@ -87,16 +90,24 @@ def scan():
         ['fs', '--scanners', 'misconfig,secret', '--severity', 'HIGH,CRITICAL', '--exit-code', '1',
          '--skip-dirs', '/source/.git,/source/.build', '--format', 'json',
          '--output', '/scan/config-security.json', '/source']]
+    for service in ('mariadb', 'redis'):
+        checks.append(['image', '--scanners', 'vuln,secret', '--severity', 'HIGH,CRITICAL',
+                       '--exit-code', '1', '--format', 'json',
+                       '--output', f'/scan/service-{service}-security.json', lock[service+'_image']])
     failed = False
     for args in checks:
         result = subprocess.run(trivy+args)
         failed |= result.returncode != 0
-    report = OUT/'vulnerabilities.json'
-    if report.exists():
+    for label, filename in [('Application image', 'vulnerabilities.json'),
+                            ('MariaDB service', 'service-mariadb-security.json'),
+                            ('Redis service', 'service-redis-security.json')]:
+        report = OUT/filename
+        if not report.exists():
+            continue
         data = json.loads(report.read_text(encoding='utf-8'))
         findings = [v for row in data.get('Results', []) for v in row.get('Vulnerabilities', [])]
         counts = Counter(v['Severity'] for v in findings)
-        summary = f"Image security findings: {dict(counts)}; {len({v['VulnerabilityID'] for v in findings})} unique vulnerability IDs.\n"
+        summary = f"{label} security findings: {dict(counts)}; {len({v['VulnerabilityID'] for v in findings})} unique vulnerability IDs.\n"
         print(summary)
         if os.environ.get('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as handle:
