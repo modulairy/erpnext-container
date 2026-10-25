@@ -28,6 +28,8 @@ Security overlays update direct dependency declarations as well as Yarn resoluti
 
 Plyr stays on 3.7.8 because 3.8 changes the deep import used by this Frappe release. Helpdesk uses the patched Vite 7 line because Vite 8 rejects duplicate imports in its current source. Other applications use Vite 8. Revisiting these compatibility limits requires a successful frontend build.
 
+Curl library packages use the newest common version from signed Debian 13 backports. The installed MariaDB client and curl versions are checked against the image lock during integration tests.
+
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
 ## Runtime
