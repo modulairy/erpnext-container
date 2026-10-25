@@ -100,6 +100,8 @@ def verify():
         from git import Repo
         with Repo.init(Path(directory)/'git-fixture') as repository:
             assert repository.bare is False
+    import importlib.util
+    assert importlib.util.find_spec('pip') is None, 'Build-only pip remains in runtime'
     assert not Path('/usr/local/bin/npm').exists()
     assert not Path('/usr/local/bin/yarn').exists()
     assert not list(Path('apps').glob('*/node_modules/esbuild*/bin/esbuild'))
