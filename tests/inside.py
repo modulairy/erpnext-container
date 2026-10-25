@@ -81,13 +81,16 @@ def verify():
     sid = session.cookies.get('sid')
     # API keys avoid coupling CRUD checks to web-session CSRF implementation details.
     from frappe.core.doctype.user.user import generate_keys
-    secret = generate_keys('Administrator')['api_secret']
-    key = frappe.db.get_value('User', 'Administrator', 'api_key')
+    credentials = generate_keys('Administrator')
+    secret, key = credentials['api_secret'], credentials['api_key']
     frappe.db.commit()
     session.cookies.clear()
     session.headers['Authorization'] = f'token {key}:{secret}'
     response = session.post(base+'/api/resource/Item Group', json={
         'item_group_name': 'Container Smoke Test', 'parent_item_group': 'All Item Groups'}, timeout=30)
+    if not response.ok:
+        detail = response.text.replace(secret, '[REDACTED]').replace(key, '[REDACTED]')
+        raise RuntimeError(f'API create failed: {response.status_code}: {detail}')
     response.raise_for_status()
     name = response.json()['data']['name']
     response = session.get(base+'/api/resource/Item Group/'+quote(name, safe=''), timeout=30)
