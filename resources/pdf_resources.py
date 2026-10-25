@@ -15,6 +15,9 @@ def safe_html(html):
     for tag in soup.find_all('meta'):
         if tag.get('http-equiv'):
             tag.decompose()
+    for tag in soup.find_all('link'):
+        if tag.get('rel') != ['stylesheet']:
+            tag.decompose()
     for tag in soup.find_all(True):
         for name in list(tag.attrs):
             if name.lower().startswith('on'):
