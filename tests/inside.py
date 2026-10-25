@@ -46,6 +46,9 @@ def verify():
         installed = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', package], text=True)
         assert installed == LOCK['mariadb_client']['version'], (package, installed)
     print('PASS: locked MariaDB client package versions', flush=True)
+    for package in ('curl', 'libcurl3t64-gnutls', 'libcurl4-gnutls', 'libcurl4t64'):
+        installed = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', package], text=True)
+        assert installed == LOCK['curl_backport'], (package, installed)
     import requests
     import frappe
     from websockets.sync.client import connect
@@ -63,6 +66,9 @@ def verify():
         if time.monotonic() > deadline:
             raise RuntimeError('HTTP readiness timeout')
         time.sleep(3)
+    command('curl', '--fail', '--silent', '--show-error', '--max-time', '30',
+            '-H', 'Host: '+SITE, base+'/api/method/ping')
+    print('PASS: locked curl packages and HTTP request', flush=True)
     response = session.post(base+'/api/method/login', data={'usr': 'Administrator',
                             'pwd': os.environ['ADMIN_PASSWORD']}, timeout=30)
     response.raise_for_status()
