@@ -38,6 +38,9 @@ def setup():
             command('bench', '--site', SITE, 'install-app', app['name'])
     command('bench', '--site', SITE, 'migrate')
     command('bench', '--site', SITE, 'enable-scheduler')
+    other = Path('sites/cache-other.local')
+    (other/'public/files').mkdir(parents=True, exist_ok=True)
+    (other/'site_config.json').write_text('{"redis_cache":"redis://redis:6379/3"}')
     print('PASS: site creation, all applications installed, migration, scheduler enabled', flush=True)
 
 
@@ -84,6 +87,7 @@ def verify():
     response = session.get(base+('/' if not asset.startswith('/') else '')+asset, timeout=30)
     response.raise_for_status()
     assert response.content
+    assert response.headers.get('X-HTTP-Redis-Cache') == 'BYPASS'
     with tempfile.TemporaryDirectory() as directory:
         pdf = Path(directory)/'test.pdf'
         from pypdf import PdfReader, PdfWriter
@@ -147,6 +151,8 @@ def verify():
     print('PASS: authenticated API CRUD and application inventory', flush=True)
     from pdf_test import verify_pdf
     verify_pdf(session, base)
+    from cache_test import verify_cache
+    verify_cache()
     jobs = [frappe.enqueue('frappe.utils.now', queue=q, job_name=f'container-smoke-{q}')
             for q in ('short', 'default', 'long')]
     deadline = time.monotonic() + 120
