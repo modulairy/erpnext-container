@@ -42,6 +42,10 @@ def setup():
 
 
 def verify():
+    for package in ('mariadb-client', 'mariadb-client-core', 'mariadb-common', 'libmariadb3'):
+        installed = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', package], text=True)
+        assert installed == LOCK['mariadb_client']['version'], (package, installed)
+    print('PASS: locked MariaDB client package versions', flush=True)
     import requests
     import frappe
     from websockets.sync.client import connect
