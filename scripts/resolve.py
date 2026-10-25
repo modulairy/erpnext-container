@@ -2,6 +2,7 @@
 import ast
 import hashlib
 import gzip
+import lzma
 import json
 import os
 import re
@@ -209,6 +210,20 @@ def mariadb_client(out):
     return {'repository': repository, 'version': version, 'key_sha256': hashlib.sha256(key).hexdigest()}
 
 
+def curl_backport():
+    url = 'https://deb.debian.org/debian/dists/trixie-backports/main/binary-amd64/Packages.xz'
+    index = lzma.decompress(request(url)).decode()
+    candidates = {name: set() for name in ('curl', 'libcurl3t64-gnutls', 'libcurl4-gnutls', 'libcurl4t64')}
+    for paragraph in index.split('\n\n'):
+        fields = dict(line.split(': ', 1) for line in paragraph.splitlines()
+                      if ': ' in line and not line.startswith(' '))
+        name, version = fields.get('Package'), fields.get('Version', '')
+        if name in candidates and re.fullmatch(r'\d+\.\d+\.\d+-\d+~bpo13\+\d+(?:\+b\d+)?', version):
+            candidates[name].add(version)
+    common = set.intersection(*candidates.values())
+    return max(common, key=lambda v: tuple(map(int, re.findall(r'\d+', v))))
+
+
 def scanner_version():
     # Public registry metadata works on hosted runners where the vendor's
     # authenticated GitHub API is restricted by an organization IP allow list.
@@ -275,6 +290,7 @@ def main():
             'python': python, 'node': node, 'bench': bench, 'yarn': yarn,
             'security_overrides': security_versions(python),
             'mariadb_client': mariadb_client(out),
+            'curl_backport': curl_backport(),
             'python_image': image_digest(f'python:{python}-slim-trixie'),
             'node_image': image_digest(f'node:{node}-trixie-slim'),
             'mariadb_image': image_digest('mariadb:11.8'),
