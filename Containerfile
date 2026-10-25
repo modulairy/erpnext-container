@@ -22,14 +22,18 @@ RUN python -c 'import hashlib,json; from pathlib import Path; assert hashlib.sha
     && rm -rf /var/lib/apt/lists/* /tmp/wkhtmltox.deb /etc/nginx/sites-enabled/default \
     && pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["security_overrides"]["python"]; subprocess.run(["python","-m","pip","install","--upgrade"]+[k+"=="+p[k] for k in ("pip","setuptools","urllib3")],check=True)' \
+    && python -m pip check \
     && sed -i '/user www-data/d' /etc/nginx/nginx.conf \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log \
     && touch /run/nginx.pid \
     && chown -R frappe:frappe /etc/nginx /var/log/nginx /var/lib/nginx /run/nginx.pid
+COPY --from=resolved mariadb-keyring.asc /etc/apt/keyrings/mariadb-keyring.asc
+RUN python -c 'import hashlib,json,re,subprocess; from pathlib import Path; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; assert p["repository"] == "https://deb.mariadb.org/11.8/debian"; assert re.fullmatch(r"1:11\.8\.\d+\+maria~deb13",p["version"]); assert hashlib.sha256(Path("/etc/apt/keyrings/mariadb-keyring.asc").read_bytes()).hexdigest() == p["key_sha256"]; Path("/etc/apt/sources.list.d/mariadb.list").write_text("deb [signed-by=/etc/apt/keyrings/mariadb-keyring.asc] "+p["repository"]+" trixie main\n"); subprocess.run(["apt-get","update"],check=True); subprocess.run(["apt-get","install","-y","--no-install-recommends"]+[name+"="+p["version"] for name in ("mariadb-client","mariadb-client-core","mariadb-common","libmariadb3")],check=True)' \
+    && rm -rf /var/lib/apt/lists/*
 COPY --chmod=755 resources/nginx-entrypoint.sh resources/start.sh /usr/local/bin/
 COPY resources/nginx-template.conf /templates/nginx/frappe.conf.template
-FROM base AS builder
+FROM base AS dependencies
 USER root
 ARG YARN_VERSION
 RUN pip install --no-cache-dir packaging==26.3
@@ -39,12 +43,15 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && npm install --global "yarn@${YARN_VERSION}"
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential pkg-config libpq-dev \
-       libffi-dev liblcms2-dev libldap2-dev libmariadb-dev libsasl2-dev libtiff-dev \
+       libffi-dev liblcms2-dev libldap2-dev libsasl2-dev libtiff-dev \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+    && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; subprocess.run(["apt-get","install","-y","--no-install-recommends","libmariadb-dev="+p["version"]],check=True)' \
     && rm -rf /var/lib/apt/lists/*
 COPY scripts/build.py scripts/security.py /opt/build/
 USER frappe
-RUN python /opt/build/build.py
+RUN python /opt/build/build.py install
+FROM dependencies AS builder
+RUN python /opt/build/build.py assets
 FROM base AS runtime
 ARG ERPNEXT_TAG
 ARG SOURCE_REVISION
