@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from security import overlay, prune_build_tools
 
 
 def run(*args, cwd=None):
@@ -19,6 +20,7 @@ def main():
     if {a['name'] for a in lock['apps']} != allowed:
         raise ValueError('Unexpected application set')
     sources.mkdir()
+    lock['source_overlays'] = {}
     for app in lock['apps']:
         name, sha = app['name'], app['sha']
         if app['url'] != f'https://github.com/frappe/{name}.git' or not re.fullmatch('[0-9a-f]{40}', sha):
@@ -31,12 +33,19 @@ def main():
         actual = subprocess.check_output(['git', '-C', str(dest), 'rev-parse', 'HEAD'], text=True).strip()
         if actual != sha:
             raise ValueError('Source commit mismatch')
+        lock['source_overlays'][name] = overlay(dest, lock['security_overrides'])
+        run('git', '-C', str(dest), 'add', '.')
+        run('git', '-C', str(dest), '-c', 'user.name=Container security overlay',
+            '-c', 'user.email=container@example.invalid', 'commit', '--allow-empty',
+            '-m', 'Apply declared container security dependency overrides')
     run('bench', 'init', '--frappe-path', f'file://{sources}/frappe', '--frappe-branch', 'locked',
         '--no-procfile', '--no-backups', '--skip-redis-config-generation', '--skip-assets', str(bench))
     for app in lock['apps']:
         if app['name'] != 'frappe':
             run('bench', 'get-app', '--branch', 'locked', '--skip-assets',
                 f"file://{sources}/{app['name']}", cwd=bench)
+    run(str(bench/'env/bin/python'), '-m', 'pip', 'install', '--upgrade',
+        *[f'{name}=={version}' for name, version in lock['security_overrides']['python'].items()])
     run(str(bench/'env/bin/python'), '-m', 'pip', 'check')
     run('bench', 'build', '--production', cwd=bench)
     actual = set((bench/'sites/apps.txt').read_text().split())
@@ -47,7 +56,8 @@ def main():
     shutil.copytree(bench/'sites/assets', bench/'assets', symlinks=True)
     shutil.rmtree(bench/'sites/assets')
     (bench/'sites/assets').symlink_to(bench/'assets', target_is_directory=True)
-    shutil.copy('/opt/build/lock.json', bench/'image-lock.json')
+    lock['removed_build_tools'] = prune_build_tools(bench)
+    (bench/'image-lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     for path in bench.rglob('.git'):
         if path.is_dir():
             shutil.rmtree(path)
