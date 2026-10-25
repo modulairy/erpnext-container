@@ -20,6 +20,10 @@ Every build is followed by an isolated site installation and migration for every
 
 Trivy scans the image's OS/language dependencies and secrets, and the repository's configuration and secrets. HIGH/CRITICAL findings (including unfixed findings), scanner errors or failed tests block publication. A failed upstream combination is reported; the workflow does not remove apps, weaken the gate or silently exempt vulnerabilities. SBOM and provenance attestations accompany publication. Passing smoke tests is not a guarantee that every application feature is covered.
 
+`security-policy.json` defines reviewed dependency update ranges. Each run selects stable versions from PyPI/npm, applies explicit source overlays before installation and frontend compilation, and records the changes in the image lock. These overlays intentionally differ from upstream dependency pins; image-codec, PDF-reader, file-lock and GitPython checks supplement integration tests. A newer upstream requirement that would be downgraded stops the build for policy review.
+
+npm/Yarn are confined to the builder, and esbuild compiler packages are removed after asset generation. Other node_modules are retained because public asset symlinks serve some files directly; their package metadata remains available to the scanner. MariaDB and Redis image digests are also scanned separately, and their HIGH/CRITICAL findings block publication. No CVE exceptions are configured.
+
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
 ## Runtime
