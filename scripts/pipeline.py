@@ -41,9 +41,12 @@ def build():
 
 def integration():
     lock = load()
+    (OUT/'pdf').mkdir(exist_ok=True)
+    # Disposable artifact directory is written by the container's uid 1000.
+    (OUT/'pdf').chmod(0o777)
     env = dict(os.environ, TEST_IMAGE=IMAGE, MARIADB_IMAGE=lock['mariadb_image'],
                REDIS_IMAGE=lock['redis_image'], DB_PASSWORD=secrets.token_hex(24),
-               ADMIN_PASSWORD=secrets.token_hex(24))
+               ADMIN_PASSWORD=secrets.token_hex(24), PDF_OUTPUT_DIR=str(OUT/'pdf'))
     compose = ['docker', 'compose', '-p', 'erpnext-test-'+secrets.token_hex(4),
                '-f', str(ROOT/'tests/compose.yaml')]
     report = OUT/'integration.log'
