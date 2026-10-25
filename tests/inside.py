@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import socket
 import sys
 import tempfile
 import time
@@ -37,7 +38,7 @@ def setup():
 def verify():
     import requests
     import frappe
-    import socketio
+    from websockets.sync.client import connect
     session = requests.Session()
     session.headers['Host'] = SITE
     base = 'http://frontend:8080'
@@ -71,7 +72,8 @@ def verify():
         html.write_text('<html><body>ERPNext PDF smoke test</body></html>')
         command('wkhtmltopdf', '--quiet', str(html), str(pdf))
         assert pdf.read_bytes().startswith(b'%PDF-')
-    frappe.init(site=SITE, sites_path=str(Path('sites').resolve()))
+    os.chdir('sites')
+    frappe.init(site=SITE, sites_path=os.getcwd())
     frappe.connect()
     frappe.set_user('Administrator')
     expected = {a['name'] for a in LOCK['apps']}
@@ -82,6 +84,7 @@ def verify():
     secret = generate_keys('Administrator')['api_secret']
     key = frappe.db.get_value('User', 'Administrator', 'api_key')
     frappe.db.commit()
+    session.cookies.clear()
     session.headers['Authorization'] = f'token {key}:{secret}'
     response = session.post(base+'/api/resource/Item Group', json={
         'item_group_name': 'Container Smoke Test', 'parent_item_group': 'All Item Groups'}, timeout=30)
@@ -102,11 +105,18 @@ def verify():
         time.sleep(2)
     assert all(job.get_status(refresh=True) == 'finished' for job in jobs)
     assert not frappe.conf.get('pause_scheduler')
-    client = socketio.Client()
-    client.connect(base, headers={'Host': SITE, 'Cookie': f'sid={sid}', 'Origin': f'http://{SITE}'},
-                   namespaces=['/'+SITE], transports=['websocket'], wait_timeout=30)
-    assert client.connected
-    client.disconnect()
+    # Use Frappe's bundled websocket client; no test-only package or internet access.
+    with socket.create_connection(('frontend', 8080), timeout=30) as tcp:
+        with connect(f'ws://{SITE}:8080/socket.io/?EIO=4&transport=websocket', sock=tcp,
+                     origin=f'http://{SITE}', additional_headers={'Cookie': f'sid={sid}'},
+                     open_timeout=30) as client:
+            assert client.recv(timeout=30).startswith('0')  # Engine.IO handshake
+            client.send(f'40/{SITE},')  # Authenticate the site's Socket.IO namespace.
+            frame = client.recv(timeout=30)
+            while frame == '2':
+                client.send('3')
+                frame = client.recv(timeout=30)
+            assert frame.startswith(f'40/{SITE},'), frame
     frappe.destroy()
     print('PASS: HTTP, login, authenticated API CRUD, assets, PDF, app inventory, all queues, websocket', flush=True)
 
