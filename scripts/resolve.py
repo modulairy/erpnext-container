@@ -170,6 +170,23 @@ def image_digest(tag):
     return tag + '@' + match[1]
 
 
+def scanner_version():
+    # Public registry metadata works on hosted runners where the vendor's
+    # authenticated GitHub API is restricted by an organization IP allow list.
+    prefix = 'https://hub.docker.com/v2/repositories/aquasec/trivy/tags'
+    url = prefix + '?page_size=100'
+    versions = []
+    seen = set()
+    while url:
+        if not url.startswith(prefix + '?') or url in seen:
+            raise ValueError('Unexpected scanner registry pagination')
+        seen.add(url)
+        page = json.loads(request(url))
+        versions.extend(t['name'] for t in page['results'] if STABLE.fullmatch(t['name']))
+        url = page['next']
+    return max(versions, key=Version)
+
+
 def main():
     out = Path(os.environ.get('BUILD_DIR', '.build')).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -213,10 +230,7 @@ def main():
     if published_digest and published_digest != 'sha256:' + hashlib.sha256(asset_bytes).hexdigest():
         raise ValueError('wkhtmltopdf asset checksum mismatch')
     (out/'wkhtmltox.deb').write_bytes(asset_bytes)
-    trivy_release = api('repos/aquasecurity/trivy/releases/latest')
-    if not stable_releases([trivy_release]):
-        raise ValueError('Scanner release must be stable')
-    trivy = trivy_release['tag_name']
+    trivy = scanner_version()
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'erpnext_tag': selected['erpnext']['ref'], 'apps': rows,
             'python': python, 'node': node, 'bench': bench, 'yarn': yarn,

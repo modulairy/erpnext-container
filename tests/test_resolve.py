@@ -1,4 +1,5 @@
 import sys
+import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -12,6 +13,13 @@ def row(name, version, deps=None, required=None):
 
 
 class ResolverTests(unittest.TestCase):
+    def test_scanner_registry_ignores_nonstable_tags_and_paginates(self):
+        prefix = 'https://hub.docker.com/v2/repositories/aquasec/trivy/tags'
+        rows = [{'results': [{'name': '0.75.0'}, {'name': 'canary'}], 'next': prefix+'?page=2'},
+                {'results': [{'name': '0.76.1'}, {'name': '0.77.0-rc1'}], 'next': None}]
+        with patch.object(resolve, 'request', side_effect=[json.dumps(r).encode() for r in rows]):
+            self.assertEqual(resolve.scanner_version(), '0.76.1')
+
     def test_release_order_ignores_latest_endpoint_and_nonversions(self):
         rows = [{'tag_name': name} for name in ('v15.124.1', 'v16.52.1', 'v13-baseline', 'v17.0.0-beta')]
         rows += [{'tag_name': 'v18.0.0', 'prerelease': True}, {'tag_name': 'v19.0.0', 'draft': True}]
