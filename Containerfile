@@ -9,17 +9,15 @@ ENV PATH=/home/frappe/frappe-bench/env/bin:/usr/local/bin:${PATH} \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=resolved wkhtmltox.deb /tmp/wkhtmltox.deb
 COPY --from=resolved lock.json /opt/build/lock.json
-RUN python -c 'import hashlib,json; from pathlib import Path; assert hashlib.sha256(Path("/tmp/wkhtmltox.deb").read_bytes()).hexdigest() == json.loads(Path("/opt/build/lock.json").read_text())["wkhtmltopdf"]["sha256"]' \
-    && useradd -m -u 1000 -s /bin/bash frappe \
+RUN useradd -m -u 1000 -s /bin/bash frappe \
     && apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends ca-certificates curl git nginx gettext-base \
        libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
        mariadb-client libmariadb3 libpq5 libmagic1 media-types tzdata-legacy \
-       chromium-headless-shell /tmp/wkhtmltox.deb \
-    && rm -rf /var/lib/apt/lists/* /tmp/wkhtmltox.deb /etc/nginx/sites-enabled/default \
+       chromium-headless-shell fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["security_overrides"]["python"]; subprocess.run(["python","-m","pip","install","--upgrade"]+[k+"=="+p[k] for k in ("pip","setuptools","urllib3")],check=True)' \
     && python -m pip check \
@@ -49,7 +47,8 @@ RUN apt-get update \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; subprocess.run(["apt-get","install","-y","--no-install-recommends","libmariadb-dev="+p["version"]],check=True)' \
     && rm -rf /var/lib/apt/lists/*
-COPY scripts/build.py scripts/security.py /opt/build/
+COPY scripts/build.py scripts/security.py scripts/pdf_overlay.py /opt/build/
+COPY resources/chrome_pdf_generator.py resources/pdf_resources.py /opt/build/pdf/
 USER frappe
 RUN python /opt/build/build.py install
 FROM dependencies AS builder
