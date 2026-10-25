@@ -237,7 +237,7 @@ def main():
             'python_image': image_digest(f'python:{python}-slim-trixie'),
             'node_image': image_digest(f'node:{node}-trixie-slim'),
             'mariadb_image': image_digest('mariadb:11.8'),
-            'redis_image': image_digest('redis:7.2-alpine'),
+            'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': image_digest(f'aquasec/trivy:{trivy.lstrip("v")}'),
             'wkhtmltopdf': {'url': asset['browser_download_url'],
                            'sha256': hashlib.sha256(asset_bytes).hexdigest()}}
