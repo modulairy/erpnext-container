@@ -50,6 +50,9 @@ LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-cont
 COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
 USER frappe
 WORKDIR /home/frappe/frappe-bench
+RUN test -x /usr/bin/chromium-headless-shell \
+    && mkdir -p chromium/chrome-linux \
+    && ln -s /usr/bin/chromium-headless-shell chromium/chrome-linux/headless_shell
 VOLUME ["/home/frappe/frappe-bench/sites", "/home/frappe/frappe-bench/logs"]
 EXPOSE 8000 8080 9000
 HEALTHCHECK NONE
