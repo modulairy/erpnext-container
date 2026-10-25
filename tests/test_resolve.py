@@ -1,5 +1,8 @@
 import sys
 import json
+import gzip
+import hashlib
+import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -13,6 +16,19 @@ def row(name, version, deps=None, required=None):
 
 
 class ResolverTests(unittest.TestCase):
+    def test_mariadb_selects_newest_version_available_for_every_client_package(self):
+        packages = ('mariadb-client', 'mariadb-client-core', 'mariadb-common', 'libmariadb3', 'libmariadb-dev')
+        index = ''.join(f'Package: {name}\nVersion: 1:11.8.{patch}+maria~deb13\n\n'
+                        for name in packages for patch in (8, 9))
+        index += 'Package: mariadb-client\nVersion: 1:11.8.10+maria~deb13\n\n'
+        key = b'test signing key'
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+                resolve, 'request', side_effect=[key, gzip.compress(index.encode())]):
+            selected = resolve.mariadb_client(Path(directory))
+            self.assertEqual(selected['version'], '1:11.8.9+maria~deb13')
+            self.assertEqual(selected['key_sha256'], hashlib.sha256(key).hexdigest())
+            self.assertEqual((Path(directory)/'mariadb-keyring.asc').read_bytes(), key)
+
     def test_scanner_registry_ignores_nonstable_tags_and_paginates(self):
         prefix = 'https://hub.docker.com/v2/repositories/aquasec/trivy/tags'
         rows = [{'results': [{'name': '0.75.0'}, {'name': 'canary'}], 'next': prefix+'?page=2'},
