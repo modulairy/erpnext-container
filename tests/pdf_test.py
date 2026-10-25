@@ -58,18 +58,28 @@ def verify_pdf(session, base):
     customer = 'Container PDF Customer'
     if not frappe.db.exists('Customer', customer):
         frappe.get_doc({'doctype': 'Customer', 'customer_name': customer,
-                        'customer_type': 'Company', 'customer_group': 'All Customer Groups',
+                        'customer_type': 'Company', 'customer_group': frappe.db.get_value('Customer Group', {'is_group': 0}),
                         'territory': 'All Territories'}).insert()
     income = frappe.db.get_value('Account', {'company': company, 'root_type': 'Income', 'is_group': 0}, 'name')
     receivable = frappe.db.get_value('Account', {'company': company, 'account_type': 'Receivable', 'is_group': 0}, 'name')
     cost_center = frappe.db.get_value('Cost Center', {'company': company, 'is_group': 0}, 'name')
+    year = str(frappe.utils.getdate().year)
+    if not frappe.db.exists('Fiscal Year', year):
+        frappe.get_doc({'doctype': 'Fiscal Year', 'year': year,
+                        'year_start_date': year+'-01-01', 'year_end_date': year+'-12-31'}).insert()
+    price_list = 'Container PDF Selling'
+    if not frappe.db.exists('Price List', price_list):
+        frappe.get_doc({'doctype': 'Price List', 'price_list_name': price_list,
+                        'currency': 'USD', 'selling': 1, 'enabled': 1}).insert()
     invoice = frappe.get_doc({'doctype': 'Sales Invoice', 'company': company, 'customer': customer,
         'posting_date': frappe.utils.today(), 'due_date': frappe.utils.today(), 'currency': 'USD',
-        'conversion_rate': 1, 'debit_to': receivable, 'items': [
+        'conversion_rate': 1, 'debit_to': receivable, 'selling_price_list': price_list,
+        'price_list_currency': 'USD', 'plc_conversion_rate': 1, 'items': [
             {'item_name': 'Sandbox PDF item', 'description': 'İstanbul Şişli invoice test',
              'qty': 2, 'rate': 12.5, 'uom': 'Nos', 'income_account': income, 'cost_center': cost_center}
         ]}).insert()
     frappe.db.commit()
+    (folder/'invoice.html').write_text(frappe.get_print('Sales Invoice', invoice.name, 'Standard', no_letterhead=1))
     response = session.post(base+'/api/method/frappe.utils.print_format.download_pdf',
         data={'doctype': 'Sales Invoice', 'name': invoice.name, 'format': 'Standard', 'no_letterhead': 1}, timeout=100)
     response.raise_for_status()
@@ -77,7 +87,7 @@ def verify_pdf(session, base):
     (folder/'invoice.pdf').write_bytes(response.content)
     reader = PdfReader(io.BytesIO(response.content))
     text = '\n'.join(page.extract_text() for page in reader.pages)
-    assert invoice.name in text and 'Sandbox PDF item' in text, text
+    assert invoice.name in text and 'İstanbul Şişli invoice test' in text and '25.00' in text, text
     print('PASS: saved ERPNext Sales Invoice exported through authenticated Frappe PDF API', flush=True)
 
     records = frappe.get_all('Sales Invoice', filters={'name': invoice.name}, fields=['name', 'grand_total'])
