@@ -46,6 +46,26 @@ Helpdesk search requires Redis Search commands. The test harness uses Redis 8 wi
 
 MariaDB/Redis are external services. Create a site and configure `db_host`, `redis_cache`, `redis_queue` and `redis_socketio` in the shared site configuration before starting application roles. Set `webserver_host` to the backend service and `webserver_port` to 8000 so realtime authentication can reach it. The frontend accepts `BACKEND` (default `backend:8000`), `SOCKETIO` (default `websocket:9000`) and `FRAPPE_SITE_NAME_HEADER` (default HTTP host). Internal ports are 8000, 8080 and 9000. Supply deployment-specific health checks for each role; a single image health check cannot describe all roles. `tests/compose.yaml` is a disposable test harness, not a production deployment.
 
+## Redis HTTP cache
+
+Set `HTTP_REDIS_CACHE_ACTIVE=true` on the **frontend** role to enable Redis-backed HTTP caching. It is disabled by default. The connection is selected per known site: `HTTP_REDIS_CACHE_URL`, then the site's `redis_cache`, then `common_site_config.json`'s `redis_cache`. Site directories and configuration are read at frontend startup; restart the frontend after changing them. Redis passwords are kept in a mode-0600 runtime file and are not written into Nginx directives or logs. `rediss://` requires a certificate trusted by the system CA bundle; certificate verification cannot be disabled.
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `HTTP_REDIS_CACHE_ACTIVE` | `false` | Enable HTTP caching |
+| `HTTP_REDIS_CACHE_URL` | site/global configuration | Optional `redis://` or `rediss://` connection, including ACL credentials/database |
+| `HTTP_REDIS_CACHE_STATIC_TTL` | `86400` | Public static file lifetime, seconds (maximum 30 days) |
+| `HTTP_REDIS_CACHE_PUBLIC_TTL` | `60` | Maximum anonymous public response lifetime, seconds (maximum 1 hour) |
+| `HTTP_REDIS_CACHE_MAX_BYTES` | `16777216` | Maximum cached response size (maximum 64 MiB) |
+| `HTTP_REDIS_CACHE_TIMEOUT_MS` | `200` | Redis operation timeout |
+| `HTTP_REDIS_CACHE_POOL_SIZE` | `10` | Redis connections per worker/site |
+| `HTTP_REDIS_CACHE_PREFIX` | `frappe-http` | Separate HTTP key namespace |
+| `HTTP_REDIS_CACHE_GENERATION` | `1` | Increment and restart to invalidate existing HTTP entries |
+
+Public assets and files can return Redis hits even with browser hard-refresh headers. Other responses are cached only for anonymous GET requests with explicit `Cache-Control: public` and a positive lifetime. Authorization, cookies, private/no-store/no-cache responses, Set-Cookie, unsupported Vary, API, login and protected routes bypass shared caching. Range and HEAD requests use normal handling. Keys separate sites, hosts, schemes, languages, queries and image builds. `X-HTTP-Redis-Cache` reports `HIT`, `MISS` or `BYPASS`. Redis failures fall back to normal file/upstream service.
+
+Changed or deleted public files can remain cached until their TTL expires. Bump the generation to invalidate them immediately; hard refresh intentionally does not purge static entries. No `FLUSHDB`, Redis eviction-policy change or application/session-cache mutation is performed. Account for HTTP objects in Redis capacity planning. Responses above the size limit remain uncached. Nginx's Debian Lua/srcache modules and the locked official Redis Lua client are included in the image's security checks.
+
 ## Local verification
 
 Requires Python 3.14, Docker with Buildx/Compose, network access and sufficient disk space for the multi-app build. Set `GITHUB_TOKEN` in the process environment to avoid unauthenticated API limits. It is used only by the resolver, never passed into the container build. Optionally set `BUILD_DIR` to an absolute output directory.
