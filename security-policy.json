@@ -1,0 +1,26 @@
+{
+  "python": {
+    "Pillow": ">=13.0.0,<14",
+    "GitPython": ">=3.2.1,<4",
+    "filelock": ">=4.2.1,<5",
+    "pypdf": ">=6.21.2,<7",
+    "urllib3": ">=2.8.0,<3",
+    "pip": ">=26,<27",
+    "setuptools": ">=82,<83"
+  },
+  "javascript": {
+    "dompurify": ">=3.4.17 <4",
+    "socket.io-parser": ">=4.2.7 <5",
+    "ws": ">=8.21.0 <9",
+    "axios": ">=1.20.0 <2",
+    "@tiptap/core": ">=3.30.5 <4",
+    "prosemirror-view": ">=1.42.3 <2",
+    "shell-quote": ">=1.9.0 <2",
+    "tar": ">=7.5.21 <8",
+    "source-map-js": ">=1.2.2 <2",
+    "browserslist": ">=4.28.7 <5",
+    "postcss": ">=8.5.18 <9",
+    "tmp": ">=0.2.6 <0.3",
+    "braces": ">=3.0.3 <4"
+  }
+}
