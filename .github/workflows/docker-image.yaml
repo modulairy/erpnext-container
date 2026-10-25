@@ -37,7 +37,9 @@ jobs:
       - name: Resolve compatible public releases
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python scripts/resolve.py
+        run: |
+          mkdir -p .build
+          python scripts/resolve.py 2>&1 | tee .build/resolve.log
       - name: Build immutable inputs
         id: build
         run: python scripts/pipeline.py build

@@ -1,11 +1,11 @@
 """Resolve public sources once per run; never execute upstream metadata."""
 import ast
-import base64
 import hashlib
 import json
 import os
 import re
 import subprocess
+import time
 import tomllib
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -33,8 +33,19 @@ def request(url):
     token = os.environ.get('GITHUB_TOKEN')
     if token and url.startswith('https://api.github.com/'):
         headers['Authorization'] = f'Bearer {token}'
-    with urlopen(Request(url, headers=headers), timeout=90) as response:
-        return response.read()
+    for attempt in range(3):
+        try:
+            with urlopen(Request(url, headers=headers), timeout=90) as response:
+                return response.read()
+        except HTTPError as error:
+            detail = error.read().decode(errors='replace')[:500]
+            transient = error.code in (429, 502, 503, 504) or (
+                error.code == 403 and 'rate limit' in detail.lower())
+            if transient and attempt < 2:
+                time.sleep(min(int(error.headers.get('Retry-After', '30')), 60))
+                continue
+            error.add_note(f'Public source request failed: {url}: {detail}')
+            raise
 
 
 def api(path):
@@ -61,12 +72,11 @@ def stable_releases(rows):
 
 def source(app, ref, path, optional=False):
     try:
-        row = api(f'repos/frappe/{app}/contents/{path}?ref={quote(ref, safe="")}')
+        return request(f'https://raw.githubusercontent.com/frappe/{app}/{quote(ref, safe="")}/{path}').decode()
     except HTTPError as error:
         if optional and error.code == 404:
             return ''
         raise
-    return base64.b64decode(row['content']).decode()
 
 
 def literal(text, name, default=None):
@@ -203,7 +213,10 @@ def main():
     if published_digest and published_digest != 'sha256:' + hashlib.sha256(asset_bytes).hexdigest():
         raise ValueError('wkhtmltopdf asset checksum mismatch')
     (out/'wkhtmltox.deb').write_bytes(asset_bytes)
-    trivy = stable_releases(pages('repos/aquasecurity/trivy/releases'))[0]['tag_name']
+    trivy_release = api('repos/aquasecurity/trivy/releases/latest')
+    if not stable_releases([trivy_release]):
+        raise ValueError('Scanner release must be stable')
+    trivy = trivy_release['tag_name']
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'erpnext_tag': selected['erpnext']['ref'], 'apps': rows,
             'python': python, 'node': node, 'bench': bench, 'yarn': yarn,
