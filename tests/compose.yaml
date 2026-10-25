@@ -1,0 +1,81 @@
+x-app: &app
+  image: ${TEST_IMAGE:?}
+  pull_policy: never
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
+  environment:
+    FRAPPE_SITE_NAME_HEADER: test.local
+    BACKEND: backend:8000
+    SOCKETIO: websocket:9000
+  networks: [test]
+
+services:
+  db:
+    image: ${MARIADB_IMAGE:?}
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:?}
+    command: [--character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci]
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 5s
+      retries: 60
+      timeout: 5s
+    networks: [test]
+  redis:
+    image: ${REDIS_IMAGE:?}
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      retries: 30
+      timeout: 3s
+    networks: [test]
+  setup:
+    <<: *app
+    profiles: [tools]
+    entrypoint: [env/bin/python, /tests/inside.py, setup]
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./inside.py:/tests/inside.py:ro
+  backend:
+    <<: *app
+    command: [backend]
+  frontend:
+    <<: *app
+    command: [frontend]
+  websocket:
+    <<: *app
+    command: [websocket]
+  scheduler:
+    <<: *app
+    command: [scheduler]
+  worker-short:
+    <<: *app
+    command: [worker-short]
+  worker-default:
+    <<: *app
+    command: [worker-default]
+  worker-long:
+    <<: *app
+    command: [worker-long]
+  verify:
+    <<: *app
+    profiles: [tools]
+    entrypoint: [env/bin/python, /tests/inside.py, verify]
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./inside.py:/tests/inside.py:ro
+
+volumes:
+  sites:
+  logs:
+networks:
+  test:
+    internal: true

@@ -1,0 +1,99 @@
+"""The same build, test and scan commands are used locally and in Actions."""
+import json
+import os
+from pathlib import Path
+import secrets
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = Path(os.environ.get('BUILD_DIR', ROOT/'.build')).resolve()
+IMAGE = 'erpnext-community:test'
+
+
+def run(args, **kwargs):
+    return subprocess.run(args, check=True, **kwargs)
+
+
+def load():
+    return json.loads((OUT/'lock.json').read_text())
+
+
+def build():
+    lock = load()
+    args = ['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--load',
+            '--build-context', f'resolved={OUT}', '--file', 'Containerfile', '--tag', IMAGE]
+    values = {'PYTHON_IMAGE': lock['python_image'], 'NODE_IMAGE': lock['node_image'],
+              'BENCH_VERSION': lock['bench'], 'YARN_VERSION': lock['yarn'],
+              'ERPNEXT_TAG': lock['erpnext_tag'],
+              'SOURCE_REVISION': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
+    for key, value in values.items():
+        args += ['--build-arg', f'{key}={value}']
+    run(args+['.'])
+    image_id = subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip()
+    (OUT/'image-id.txt').write_text(image_id)
+    run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
+
+
+def integration():
+    lock = load()
+    env = dict(os.environ, TEST_IMAGE=IMAGE, MARIADB_IMAGE=lock['mariadb_image'],
+               REDIS_IMAGE=lock['redis_image'], DB_PASSWORD=secrets.token_hex(24),
+               ADMIN_PASSWORD=secrets.token_hex(24))
+    compose = ['docker', 'compose', '-p', 'erpnext-test-'+secrets.token_hex(4),
+               '-f', str(ROOT/'tests/compose.yaml')]
+    report = OUT/'integration.log'
+    try:
+        with report.open('w', encoding='utf-8') as log:
+            for args in (['up', '-d', '--wait', '--wait-timeout', '300', 'db', 'redis'],
+                         ['run', '--rm', 'setup'],
+                         ['up', '-d', 'backend', 'frontend', 'websocket', 'scheduler',
+                          'worker-short', 'worker-default', 'worker-long'],
+                         ['run', '--rm', 'verify']):
+                run(compose+args, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=1800)
+            for service in ('backend', 'frontend', 'websocket', 'scheduler',
+                            'worker-short', 'worker-default', 'worker-long'):
+                ids = subprocess.check_output(compose+['ps', '-q', service], env=env, text=True).strip()
+                if not ids:
+                    raise RuntimeError(f'{service} exited')
+                state = json.loads(subprocess.check_output(['docker', 'inspect', ids], text=True))[0]
+                if not state['State']['Running'] or state['RestartCount']:
+                    raise RuntimeError(f'{service} is unhealthy')
+        print('Integration checks passed')
+    finally:
+        logs = subprocess.run(compose+['logs', '--no-color'], env=env, capture_output=True, text=True)
+        text = logs.stdout + logs.stderr
+        for secret in (env['DB_PASSWORD'], env['ADMIN_PASSWORD']):
+            text = text.replace(secret, '[REDACTED]')
+        (OUT/'services.log').write_text(text, encoding='utf-8')
+        if report.exists():
+            text = report.read_text(encoding='utf-8')
+            for secret in (env['DB_PASSWORD'], env['ADMIN_PASSWORD']):
+                text = text.replace(secret, '[REDACTED]')
+            report.write_text(text, encoding='utf-8')
+        run(compose+['down', '-v', '--remove-orphans'], env=env)
+
+
+def scan():
+    lock = load()
+    trivy = ['docker', 'run', '--rm', '-v', f'{OUT}:/scan', '-v', f'{ROOT}:/source:ro',
+             lock['trivy_image']]
+    run(trivy+['image', '--input', '/scan/image.tar', '--format', 'cyclonedx',
+               '--output', '/scan/sbom.cdx.json'])
+    checks = [
+        ['image', '--input', '/scan/image.tar', '--scanners', 'vuln,secret', '--severity', 'HIGH,CRITICAL',
+         '--exit-code', '1', '--format', 'json', '--output', '/scan/vulnerabilities.json'],
+        ['fs', '--scanners', 'misconfig,secret', '--severity', 'HIGH,CRITICAL', '--exit-code', '1',
+         '--skip-dirs', '/source/.git,/source/.build', '--format', 'json',
+         '--output', '/scan/config-security.json', '/source']]
+    failed = False
+    for args in checks:
+        result = subprocess.run(trivy+args)
+        failed |= result.returncode != 0
+    if failed:
+        raise RuntimeError('Security gate failed; review security reports')
+
+
+if __name__ == '__main__':
+    os.chdir(ROOT)
+    {'build': build, 'integration': integration, 'scan': scan}[sys.argv[1]]()
