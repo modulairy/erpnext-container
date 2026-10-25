@@ -24,6 +24,10 @@ Trivy scans the image's OS/language dependencies and secrets, and the repository
 
 npm/Yarn are confined to the builder; pip and esbuild compiler packages are removed from the final runtime after installation and asset generation. Add or update dependencies through a rebuilt image. Other node_modules are retained because public asset symlinks serve some files directly; their package metadata remains available to the scanner. MariaDB and Redis image digests are also scanned separately, and their HIGH/CRITICAL findings block publication. No CVE exceptions are configured.
 
+Security overlays update direct dependency declarations as well as Yarn resolutions. Upstream Yarn locks are regenerated within the reviewed ranges, and installed package versions are checked before asset compilation. Explicit major migrations are listed in the policy and must pass the same build and runtime tests. MariaDB client libraries inside the ERPNext image use the newest common 11.8 patch from MariaDB's signed Debian 13 repository; the external MariaDB service remains an official image and has a separate vulnerability report.
+
+Plyr stays on 3.7.8 because 3.8 changes the deep import used by this Frappe release. Helpdesk uses the patched Vite 7 line because Vite 8 rejects duplicate imports in its current source. Other applications use Vite 8. Revisiting these compatibility limits requires a successful frontend build.
+
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
 ## Runtime
