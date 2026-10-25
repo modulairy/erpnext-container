@@ -54,6 +54,14 @@ def api(path):
     return json.loads(request('https://api.github.com/' + path))
 
 
+def redis_lua(out):
+    # Reviewed stable protocol client; source is immutable and checked at build time.
+    sha = '3fdc727f176f565adca8c2b350a636bd74e93de2'
+    data = request(f'https://raw.githubusercontent.com/openresty/lua-resty-redis/{sha}/lib/resty/redis.lua')
+    (out/'redis.lua').write_bytes(data)
+    return {'version': 'v0.33', 'sha': sha, 'sha256': hashlib.sha256(data).hexdigest()}
+
+
 def pages(path):
     page = 1
     while True:
@@ -288,6 +296,7 @@ def main():
             'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': image_digest(f'aquasec/trivy:{trivy.lstrip("v")}'),
             'pdf_engine': 'sandboxed-system-chromium'}
+    lock['redis_lua'] = redis_lua(out)
     (out/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     print(json.dumps({k: lock[k] for k in ('erpnext_tag', 'python', 'node', 'bench')}))
     for row in rows:
