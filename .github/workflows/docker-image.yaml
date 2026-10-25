@@ -61,6 +61,7 @@ jobs:
           include-hidden-files: true
           path: |
             .build/lock.json
+            .build/image-lock.json
             .build/*.log
             .build/*security.json
             .build/vulnerabilities.json
