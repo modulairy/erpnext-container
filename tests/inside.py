@@ -79,6 +79,31 @@ def verify():
         html.write_text('<html><body>ERPNext PDF smoke test</body></html>')
         command('wkhtmltopdf', '--quiet', str(html), str(pdf))
         assert pdf.read_bytes().startswith(b'%PDF-')
+        from pypdf import PdfReader
+        assert len(PdfReader(pdf).pages) == 1
+        from PIL import Image
+        for format in ('PNG', 'JPEG', 'WEBP'):
+            path = Path(directory)/('image.'+format.lower())
+            Image.new('RGB', (32, 32), 'white').resize((16, 16)).save(path, format=format)
+            with Image.open(path) as picture:
+                picture.load()
+                assert picture.size == (16, 16)
+        from filelock import FileLock, Timeout
+        lock_path = Path(directory)/'test.lock'
+        with FileLock(lock_path):
+            try:
+                FileLock(lock_path).acquire(timeout=0)
+            except Timeout:
+                pass
+            else:
+                raise AssertionError('Concurrent file lock was not excluded')
+        from git import Repo
+        with Repo.init(Path(directory)/'git-fixture') as repository:
+            assert repository.bare is False
+    assert not Path('/usr/local/bin/npm').exists()
+    assert not Path('/usr/local/bin/yarn').exists()
+    assert not list(Path('apps').glob('*/node_modules/esbuild*/bin/esbuild'))
+    print('PASS: security override image codecs, PDF reader, file locking, GitPython and compiler removal', flush=True)
     print('PASS: assets and PDF', flush=True)
     os.chdir('sites')
     frappe.init(site=SITE, sites_path=os.getcwd())
