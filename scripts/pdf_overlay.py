@@ -15,7 +15,7 @@ def replace_function(text, name, replacement):
 
 
 def apply_pdf(root, resources):
-    if root.name not in ('frappe', 'erpnext'):
+    if root.name not in ('frappe', 'erpnext', 'print_designer'):
         return []
     changes = []
     def write(path, text):
@@ -23,6 +23,32 @@ def apply_pdf(root, resources):
         path.write_text(text)
         changes.append({'file': str(path.relative_to(root)), 'previous_sha256': hashlib.sha256(previous).hexdigest(),
                         'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'action': 'sandboxed Chromium PDF migration'})
+    if root.name == 'print_designer':
+        path = root/'print_designer/pdf.py'
+        text = path.read_text()
+        old = 'print_designer/pdf_generator/framework fromats/pdf_header_footer_chrome.html'
+        if old not in text:
+            raise ValueError('Review changed Print Designer header hook')
+        text = text.replace(old, 'templates/print_formats/chrome_pdf_header_footer.html')
+        text = text.replace('"wkhtmltopdf"', '"chrome"')
+        write(path, text)
+        path = root/'print_designer/pdf_generator/pdf.py'
+        if 'def before_request()' not in path.read_text():
+            raise ValueError('Review changed Print Designer PDF entry points')
+        write(path, '''import frappe
+
+def before_request():
+    if frappe.request.path in ('/api/method/frappe.utils.print_format.download_pdf', '/printview'):
+        frappe.local.form_dict.pdf_generator = 'chrome'
+
+def after_request():
+    pass  # Each core renderer closes its own browser in a finally block.
+
+def get_pdf(print_format, html, options, output, pdf_generator=None):
+    from frappe.utils.pdf import get_chrome_pdf
+    return get_chrome_pdf(print_format, html, options, output, pdf_generator='chrome')
+''')
+        return changes
     if root.name == 'erpnext':
         path = root/'erpnext/accounts/doctype/bank_statement_import_log/test_bank_statement_import_log.py'
         text = path.read_text()
@@ -61,7 +87,33 @@ def apply_pdf(root, resources):
     """Legacy print UI availability probe for this image's default PDF engine."""
     return os.access('/usr/bin/chromium-headless-shell', os.X_OK)
 ''')
+    text = replace_function(text, 'get_chrome_pdf', '''def get_chrome_pdf(print_format, html, options, output, pdf_generator=None):
+    from pypdf import PdfReader
+    from frappe.utils.pdf_generator.browser import Browser
+    from frappe.utils.pdf_generator.chrome_pdf_generator import ChromePDFGenerator
+    from frappe.utils.pdf_generator.pdf_merge import PDFTransformer
+    if pdf_generator != 'chrome':
+        return
+    options = dict(options or {})
+    if output is not None:
+        options.pop('password', None)
+    generator = ChromePDFGenerator()
+    try:
+        browser = Browser(generator, print_format, html, options)
+        data = PDFTransformer(browser).transform_pdf()
+        if output is not None:
+            output.append_pages_from_reader(PdfReader(io.BytesIO(data)))
+            return output
+        return data
+    finally:
+        generator._close_browser()
+''')
     write(pdf, text)
+    template = root/'frappe/templates/print_formats/chrome_pdf_header_footer.html'
+    text = template.read_text()
+    if '\t\t\tbody {' not in text:
+        raise ValueError('Review upstream Chromium header container styling')
+    write(template, text.replace('\t\t\tbody {', '\t\t\thtml body, html body > .print-format {'))
     directory = root/'frappe/utils/pdf_generator'
     for name in ('chrome_pdf_generator.py', 'pdf_resources.py'):
         write(directory/name, (resources/name).read_text())
@@ -71,6 +123,19 @@ def apply_pdf(root, resources):
     if old not in text:
         raise ValueError('Review upstream Browser print format lookup')
     text = text.replace(old, '(bool(print_format) and '+old+')')
+    text = text.replace('self.header_height = self.header_page.get_element_height()',
+                        'self.header_height = self.header_page.get_element_height()\n\t\t\tif not self.is_print_designer:\n\t\t\t\toptions.setdefault("margin-top", "15mm")')
+    text = text.replace('self.footer_height = self.footer_page.get_element_height()',
+                        'self.footer_height = self.footer_page.get_element_height()\n\t\t\tif not self.is_print_designer:\n\t\t\t\toptions.setdefault("margin-bottom", "15mm")')
+    marker = '\t\tupdated_options["paperWidth"] = convert_uom(options["page-width"], "px", "in", only_number=True)'
+    if marker not in text:
+        raise ValueError('Review upstream Chromium orientation handling')
+    text = text.replace(marker, '''\t\t# Explicit @page dimensions take precedence over CDP's landscape flag.
+\t\tif updated_options["landscape"]:
+\t\t\tif options["page-width"] < options["page-height"]:
+\t\t\t\toptions["page-width"], options["page-height"] = options["page-height"], options["page-width"]
+\t\t\tupdated_options["landscape"] = False
+'''+marker)
     marker = '\t\t# make copy of options to update them in header, body, footer.'
     if marker not in text:
         raise ValueError('Review upstream Chromium page scaling')
