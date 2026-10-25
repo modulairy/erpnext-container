@@ -4,14 +4,15 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from security import overlay, prune_build_tools
+import sys
+from security import overlay, prune_build_tools, verify_overrides
 
 
 def run(*args, cwd=None):
     subprocess.run(args, cwd=cwd, check=True)
 
 
-def main():
+def install():
     lock = json.loads(Path('/opt/build/lock.json').read_text())
     bench = Path('/home/frappe/frappe-bench')
     sources = Path('/home/frappe/sources')
@@ -47,7 +48,17 @@ def main():
     run(str(bench/'env/bin/python'), '-m', 'pip', 'install', '--upgrade',
         *[f'{name}=={version}' for name, version in lock['security_overrides']['python'].items()])
     run(str(bench/'env/bin/python'), '-m', 'pip', 'check')
+    verify_overrides(bench, lock['security_overrides'])
+    (bench/'image-lock.json').write_text(json.dumps(lock, indent=2)+'\n')
+
+
+def assets():
+    bench = Path('/home/frappe/frappe-bench')
+    sources = Path('/home/frappe/sources')
+    lock = json.loads((bench/'image-lock.json').read_text())
+    allowed = {app['name'] for app in lock['apps']}
     run('bench', 'build', '--production', cwd=bench)
+    verify_overrides(bench, lock['security_overrides'])
     actual = set((bench/'sites/apps.txt').read_text().split())
     if actual != allowed:
         raise ValueError(f'Unexpected installed sources: {actual}')
@@ -65,4 +76,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    {'install': install, 'assets': assets}[sys.argv[1]]()
