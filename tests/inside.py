@@ -27,6 +27,12 @@ def setup():
     Path('sites/common_site_config.json').write_text(json.dumps(config))
     command('bench', 'new-site', SITE, '--db-root-password', os.environ['DB_PASSWORD'],
             '--admin-password', os.environ['ADMIN_PASSWORD'], '--mariadb-user-host-login-scope', '%')
+    # Initialize encryption before any long-lived service caches site configuration.
+    from cryptography.fernet import Fernet
+    site_config = Path('sites')/SITE/'site_config.json'
+    values = json.loads(site_config.read_text())
+    values.setdefault('encryption_key', Fernet.generate_key().decode())
+    site_config.write_text(json.dumps(values))
     for app in LOCK['apps']:
         if app['name'] != 'frappe':
             command('bench', '--site', SITE, 'install-app', app['name'])
@@ -59,6 +65,7 @@ def verify():
     response = session.get(base+'/api/method/frappe.auth.get_logged_user', timeout=30)
     response.raise_for_status()
     assert response.json()['message'] == 'Administrator'
+    print('PASS: HTTP readiness and login', flush=True)
     response = session.get(base+'/app', timeout=30)
     response.raise_for_status()
     assert 'text/html' in response.headers['Content-Type']
@@ -72,6 +79,7 @@ def verify():
         html.write_text('<html><body>ERPNext PDF smoke test</body></html>')
         command('wkhtmltopdf', '--quiet', str(html), str(pdf))
         assert pdf.read_bytes().startswith(b'%PDF-')
+    print('PASS: assets and PDF', flush=True)
     os.chdir('sites')
     frappe.init(site=SITE, sites_path=os.getcwd())
     frappe.connect()
@@ -99,6 +107,7 @@ def verify():
     response = session.delete(base+'/api/resource/Item Group/'+quote(name, safe=''), timeout=30)
     response.raise_for_status()
     # All three queue roles must execute an actual job, not merely start a process.
+    print('PASS: authenticated API CRUD and application inventory', flush=True)
     jobs = [frappe.enqueue('frappe.utils.now', queue=q, job_name=f'container-smoke-{q}')
             for q in ('short', 'default', 'long')]
     deadline = time.monotonic() + 120
