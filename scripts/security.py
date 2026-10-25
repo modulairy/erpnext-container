@@ -1,5 +1,6 @@
 """Explicit source overlays and removal of build-only executables; no CVE suppression."""
 import json
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -10,6 +11,7 @@ from packaging.version import Version
 
 
 def overlay(root, overrides):
+    overrides = dict(overrides, javascript=javascript_versions(overrides, root.name))
     changes = []
     versions = {canonicalize_name(k): v for k, v in overrides['python'].items()}
     project = root/'pyproject.toml'
@@ -49,8 +51,10 @@ def overlay(root, overrides):
                 if not lower:
                     raise ValueError(f'Unreviewed JavaScript requirement: {name}: {constraint}')
                 selected, declared = Version(overrides['javascript'][name]), Version(lower.group())
-                if selected < declared or selected.major != declared.major:
+                migrations = overrides.get('javascript_migrations', {}).get(name, [])
+                if selected < declared or (selected.major != declared.major and declared.major not in migrations):
                     raise ValueError(f'Security policy conflicts with {name}: {constraint}')
+                data[group][name] = str(selected)
         # Yarn resolutions update the actual graph before compilation, not just metadata.
         if not resolutions:
             continue
@@ -58,7 +62,34 @@ def overlay(root, overrides):
         manifest.write_text(json.dumps(data, indent=2)+'\n')
         changes.append({'file': str(manifest.relative_to(root)),
                         'resolutions': resolutions})
+    # Resolve every dependency range again instead of retaining vulnerable lock entries.
+    for locked in root.rglob('yarn.lock'):
+        if '.git' in locked.parts or 'node_modules' in locked.parts:
+            continue
+        changes.append({'file': str(locked.relative_to(root)),
+                        'previous_sha256': hashlib.sha256(locked.read_bytes()).hexdigest(),
+                        'action': 'regenerate from updated manifests'})
+        locked.unlink()
     return changes
+
+
+def javascript_versions(overrides, app):
+    return dict(overrides['javascript'], **overrides.get('javascript_by_app', {}).get(app, {}))
+
+
+def verify_overrides(bench, overrides):
+    failures = []
+    for manifest in bench.rglob('package.json'):
+        if 'node_modules' not in manifest.parts:
+            continue
+        data = json.loads(manifest.read_text())
+        parts = manifest.relative_to(bench).parts
+        app = parts[1] if parts[0] == 'apps' else ''
+        expected = javascript_versions(overrides, app).get(data.get('name'))
+        if expected and Version(data['version']) < Version(expected):
+            failures.append(f'{manifest}: {data["version"]} < {expected}')
+    if failures:
+        raise ValueError('Security overrides were not installed:\n'+'\n'.join(failures))
 
 
 def prune_build_tools(bench):
