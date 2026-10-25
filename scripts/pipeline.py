@@ -55,7 +55,8 @@ def integration():
             for args in (['up', '-d', '--wait', '--wait-timeout', '300', 'db', 'redis'],
                          ['run', '--rm', 'setup'],
                          ['up', '-d', 'backend', 'frontend', 'websocket', 'scheduler',
-                          'worker-short', 'worker-default', 'worker-long'],
+                          'worker-short', 'worker-default', 'worker-long',
+                          'cache-origin', 'cache-frontend', 'cache-fail'],
                          ['run', '--rm', 'verify']):
                 run(compose+args, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=1800)
             for service in ('backend', 'frontend', 'websocket', 'scheduler',
