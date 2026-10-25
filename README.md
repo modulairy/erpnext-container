@@ -22,7 +22,7 @@ Trivy scans the image's OS/language dependencies and secrets, and the repository
 
 `security-policy.json` defines reviewed dependency update ranges. Each run selects stable versions from PyPI/npm, applies explicit source overlays before installation and frontend compilation, and records the changes in the image lock. These overlays intentionally differ from upstream dependency pins; image-codec, PDF-reader, file-lock and GitPython checks supplement integration tests. A newer upstream requirement that would be downgraded stops the build for policy review.
 
-npm/Yarn are confined to the builder, and esbuild compiler packages are removed after asset generation. Other node_modules are retained because public asset symlinks serve some files directly; their package metadata remains available to the scanner. MariaDB and Redis image digests are also scanned separately, and their HIGH/CRITICAL findings block publication. No CVE exceptions are configured.
+npm/Yarn are confined to the builder; pip and esbuild compiler packages are removed from the final runtime after installation and asset generation. Add or update dependencies through a rebuilt image. Other node_modules are retained because public asset symlinks serve some files directly; their package metadata remains available to the scanner. MariaDB and Redis image digests are also scanned separately, and their HIGH/CRITICAL findings block publication. No CVE exceptions are configured.
 
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
