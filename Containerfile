@@ -16,7 +16,7 @@ RUN useradd -m -u 1000 -s /bin/bash frappe \
     && apt-get install -y --no-install-recommends ca-certificates curl git nginx gettext-base \
        libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
        mariadb-client libmariadb3 libpq5 libmagic1 media-types tzdata-legacy \
-       chromium-headless-shell fonts-dejavu-core \
+       chromium-headless-shell fonts-dejavu-core libnginx-mod-http-lua libnginx-mod-http-srcache-filter lua-cjson \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["security_overrides"]["python"]; subprocess.run(["python","-m","pip","install","--upgrade"]+[k+"=="+p[k] for k in ("pip","setuptools","urllib3")],check=True)' \
@@ -32,6 +32,10 @@ RUN python -c 'import hashlib,json,re,subprocess; from pathlib import Path; p=js
 RUN python -c 'import json,re,subprocess; from pathlib import Path; v=json.load(open("/opt/build/lock.json"))["curl_backport"]; assert re.fullmatch(r"\d+\.\d+\.\d+-\d+~bpo13\+\d+(?:\+b\d+)?",v); Path("/etc/apt/sources.list.d/backports.list").write_text("deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] https://deb.debian.org/debian trixie-backports main\n"); subprocess.run(["apt-get","update"],check=True); subprocess.run(["apt-get","install","-y","--no-install-recommends","-t","trixie-backports"]+[name+"="+v for name in ("curl","libcurl3t64-gnutls","libcurl4-gnutls","libcurl4t64")],check=True)' \
     && rm -rf /var/lib/apt/lists/*
 COPY --chmod=755 resources/nginx-entrypoint.sh resources/start.sh /usr/local/bin/
+COPY resources/http_cache_config.py /usr/local/bin/
+COPY resources/http_cache.lua /usr/local/share/lua/5.1/http_cache.lua
+COPY --from=resolved redis.lua /usr/local/share/lua/5.1/resty/redis.lua
+RUN python -c 'import hashlib,json; from pathlib import Path; assert hashlib.sha256(Path("/usr/local/share/lua/5.1/resty/redis.lua").read_bytes()).hexdigest() == json.load(open("/opt/build/lock.json"))["redis_lua"]["sha256"]'
 COPY resources/nginx-template.conf /templates/nginx/frappe.conf.template
 FROM base AS dependencies
 USER root
