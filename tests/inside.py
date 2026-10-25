@@ -94,17 +94,17 @@ def verify():
     frappe.db.commit()
     session.cookies.clear()
     session.headers['Authorization'] = f'token {key}:{secret}'
-    response = session.post(base+'/api/resource/Item Group', json={
-        'item_group_name': 'Container Smoke Test', 'parent_item_group': 'All Item Groups'}, timeout=30)
+    response = session.post(base+'/api/resource/UOM', json={
+        'uom_name': 'Container Smoke Unit'}, timeout=30)
     if not response.ok:
         detail = response.text.replace(secret, '[REDACTED]').replace(key, '[REDACTED]')
         raise RuntimeError(f'API create failed: {response.status_code}: {detail}')
     response.raise_for_status()
     name = response.json()['data']['name']
-    response = session.get(base+'/api/resource/Item Group/'+quote(name, safe=''), timeout=30)
+    response = session.get(base+'/api/resource/UOM/'+quote(name, safe=''), timeout=30)
     response.raise_for_status()
-    assert response.json()['data']['item_group_name'] == 'Container Smoke Test'
-    response = session.delete(base+'/api/resource/Item Group/'+quote(name, safe=''), timeout=30)
+    assert response.json()['data']['uom_name'] == 'Container Smoke Unit'
+    response = session.delete(base+'/api/resource/UOM/'+quote(name, safe=''), timeout=30)
     response.raise_for_status()
     # All three queue roles must execute an actual job, not merely start a process.
     print('PASS: authenticated API CRUD and application inventory', flush=True)
