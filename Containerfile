@@ -9,21 +9,19 @@ ENV PATH=/home/frappe/frappe-bench/env/bin:/usr/local/bin:${PATH} \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=resolved wkhtmltox.deb /tmp/wkhtmltox.deb
 COPY --from=resolved lock.json /opt/build/lock.json
 RUN python -c 'import hashlib,json; from pathlib import Path; assert hashlib.sha256(Path("/tmp/wkhtmltox.deb").read_bytes()).hexdigest() == json.loads(Path("/opt/build/lock.json").read_text())["wkhtmltopdf"]["sha256"]' \
-    && ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && useradd -m -u 1000 -s /bin/bash frappe \
     && apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends ca-certificates curl git nginx gettext-base \
        libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
        mariadb-client libmariadb3 libpq5 libmagic1 media-types tzdata-legacy \
        chromium-headless-shell /tmp/wkhtmltox.deb \
     && rm -rf /var/lib/apt/lists/* /tmp/wkhtmltox.deb /etc/nginx/sites-enabled/default \
     && pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
-    && npm install --global "yarn@${YARN_VERSION}" \
+    && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["security_overrides"]["python"]; subprocess.run(["python","-m","pip","install","--upgrade"]+[k+"=="+p[k] for k in ("pip","setuptools","urllib3")],check=True)' \
     && sed -i '/user www-data/d' /etc/nginx/nginx.conf \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log \
@@ -33,12 +31,18 @@ COPY --chmod=755 resources/nginx-entrypoint.sh resources/start.sh /usr/local/bin
 COPY resources/nginx-template.conf /templates/nginx/frappe.conf.template
 FROM base AS builder
 USER root
+ARG YARN_VERSION
+RUN pip install --no-cache-dir packaging==26.3
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && npm install --global "yarn@${YARN_VERSION}"
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential pkg-config libpq-dev \
        libffi-dev liblcms2-dev libldap2-dev libmariadb-dev libsasl2-dev libtiff-dev \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && rm -rf /var/lib/apt/lists/*
-COPY scripts/build.py /opt/build/build.py
+COPY scripts/build.py scripts/security.py /opt/build/
 USER frappe
 RUN python /opt/build/build.py
 FROM base AS runtime
