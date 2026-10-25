@@ -275,15 +275,6 @@ def main():
     yarn_data = json.loads(request('https://registry.npmjs.org/yarn'))
     yarn = max((v for v in yarn_data['versions'] if STABLE.fullmatch(v)
                 and Version(v).major == 1), key=Version)
-    wk_release = api('repos/wkhtmltopdf/packaging/releases/latest')
-    if wk_release['prerelease'] or wk_release['draft']:
-        raise ValueError('wkhtmltopdf release must be stable')
-    asset = next(a for a in wk_release['assets'] if a['name'].endswith('.bookworm_amd64.deb'))
-    asset_bytes = request(asset['browser_download_url'])
-    published_digest = asset.get('digest')
-    if published_digest and published_digest != 'sha256:' + hashlib.sha256(asset_bytes).hexdigest():
-        raise ValueError('wkhtmltopdf asset checksum mismatch')
-    (out/'wkhtmltox.deb').write_bytes(asset_bytes)
     trivy = scanner_version()
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'erpnext_tag': selected['erpnext']['ref'], 'apps': rows,
@@ -296,8 +287,7 @@ def main():
             'mariadb_image': image_digest('mariadb:11.8'),
             'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': image_digest(f'aquasec/trivy:{trivy.lstrip("v")}'),
-            'wkhtmltopdf': {'url': asset['browser_download_url'],
-                           'sha256': hashlib.sha256(asset_bytes).hexdigest()}}
+            'pdf_engine': 'sandboxed-system-chromium'}
     (out/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     print(json.dumps({k: lock[k] for k in ('erpnext_tag', 'python', 'node', 'bench')}))
     for row in rows:
