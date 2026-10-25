@@ -1,6 +1,7 @@
 import sys
 import json
 import gzip
+import lzma
 import hashlib
 import tempfile
 from pathlib import Path
@@ -16,6 +17,14 @@ def row(name, version, deps=None, required=None):
 
 
 class ResolverTests(unittest.TestCase):
+    def test_curl_backport_requires_common_version_and_sorts_numerically(self):
+        packages = ('curl', 'libcurl3t64-gnutls', 'libcurl4-gnutls', 'libcurl4t64')
+        index = ''.join(f'Package: {name}\nVersion: 8.{minor}.0-2~bpo13+1\n\n'
+                        for name in packages for minor in (9, 21))
+        index += 'Package: curl\nVersion: 8.22.0-1~bpo13+1\n\n'
+        with patch.object(resolve, 'request', return_value=lzma.compress(index.encode())):
+            self.assertEqual(resolve.curl_backport(), '8.21.0-2~bpo13+1')
+
     def test_mariadb_selects_newest_version_available_for_every_client_package(self):
         packages = ('mariadb-client', 'mariadb-client-core', 'mariadb-common', 'libmariadb3', 'libmariadb-dev')
         index = ''.join(f'Package: {name}\nVersion: 1:11.8.{patch}+maria~deb13\n\n'
