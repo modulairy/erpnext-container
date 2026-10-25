@@ -46,6 +46,7 @@ services:
     command: [backend]
   frontend:
     <<: *app
+    depends_on: [backend, websocket]
     command: [frontend]
   websocket:
     <<: *app
