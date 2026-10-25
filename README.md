@@ -36,7 +36,11 @@ The build job has no package write permission. Only a successful run can transfe
 
 One image supports separate `backend` (default), `frontend`, `websocket`, `scheduler`, `worker-short`, `worker-default` and `worker-long` containers. Other commands are passed through, for example `bench --site example.com migrate`. Run as the included non-root `frappe` user. Use persistent volumes for `/home/frappe/frappe-bench/sites` and `/home/frappe/frappe-bench/logs`; do not mount a separate assets volume, because image assets must match application code. All service roles must use the same image digest.
 
-Print Designer uses the image's distribution-maintained Chromium through its expected executable path, so site installation does not download an older browser.
+Classic prints, report exports and Print Designer use the distribution-maintained Chromium. The image removes pdfkit and wkhtmltopdf. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
+
+Containers that render PDFs require Linux user namespaces and the supplied `resources/chromium-seccomp.json` profile, with `cap_drop: [ALL]`, `no-new-privileges:true`, and `init: true` (see `tests/compose.yaml`). The profile derives from [Playwright's Docker profile](https://github.com/microsoft/playwright/blob/v1.64.0/utils/docker/seccomp_profile.json), adding `chroot` so Chromium can isolate itself inside its user namespace without host capabilities. Configure the profile on the Docker host; it cannot be enabled from inside the image. Hosts that prohibit unprivileged user namespaces must receive a narrowly scoped administrator policy change before running this image. The renderer fails closed; do not disable the sandbox, use privileged containers or grant `SYS_ADMIN`.
+
+PDF HTML cannot run document JavaScript or fetch external resources. Store print logos, fonts and styles in permitted site/app assets; private files retain Frappe permission checks. Custom formats depending on external URLs or document scripts need adaptation. Browser CDP listens only on loopback and is never exposed as a service.
 
 Helpdesk search requires Redis Search commands. The test harness uses Redis 8 with its integrated Search module; production Redis must provide the same capability.
 
