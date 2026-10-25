@@ -1,6 +1,7 @@
 """Resolve public sources once per run; never execute upstream metadata."""
 import ast
 import hashlib
+import gzip
 import json
 import os
 import re
@@ -164,14 +165,22 @@ def pypi_latest(name, python, constraint=''):
 
 def security_versions(python):
     policy = json.loads((Path(__file__).resolve().parents[1]/'security-policy.json').read_text())
-    selected = {'python': {}, 'javascript': {}}
+    selected = {'python': {}, 'javascript': {}, 'javascript_by_app': {},
+                'javascript_migrations': policy.get('javascript_migrations', {})}
     for name, constraint in policy['python'].items():
         selected['python'][name] = pypi_latest(name, python, constraint)
-    for name, constraint in policy['javascript'].items():
-        data = json.loads(request('https://registry.npmjs.org/'+quote(name, safe='')))
-        versions = [v for v in data['versions'] if STABLE.fullmatch(v)
-                    and NpmSpec(constraint).match(NodeVersion(v))]
-        selected['javascript'][name] = max(versions, key=Version)
+    groups = [(selected['javascript'], policy['javascript'])]
+    for app, constraints in policy.get('javascript_by_app', {}).items():
+        if app not in APPS:
+            raise ValueError(f'Unknown app security policy: {app}')
+        selected['javascript_by_app'][app] = {}
+        groups.append((selected['javascript_by_app'][app], constraints))
+    for target, constraints in groups:
+        for name, constraint in constraints.items():
+            data = json.loads(request('https://registry.npmjs.org/'+quote(name, safe='')))
+            versions = [v for v in data['versions'] if STABLE.fullmatch(v)
+                        and NpmSpec(constraint).match(NodeVersion(v))]
+            target[name] = max(versions, key=Version)
     return selected
 
 
@@ -181,6 +190,23 @@ def image_digest(tag):
     if not match:
         raise ValueError(f'Missing registry digest: {tag}')
     return tag + '@' + match[1]
+
+
+def mariadb_client(out):
+    repository = 'https://deb.mariadb.org/11.8/debian'
+    key = request('https://mariadb.org/mariadb_release_signing_key.pgp')
+    (out/'mariadb-keyring.asc').write_bytes(key)
+    index = gzip.decompress(request(repository+'/dists/trixie/main/binary-amd64/Packages.gz')).decode()
+    packages = ('mariadb-client', 'mariadb-client-core', 'mariadb-common', 'libmariadb3', 'libmariadb-dev')
+    candidates = {name: set() for name in packages}
+    for paragraph in index.split('\n\n'):
+        fields = dict(line.split(': ', 1) for line in paragraph.splitlines() if ': ' in line and not line.startswith(' '))
+        name, version = fields.get('Package'), fields.get('Version', '')
+        if name in candidates and re.fullmatch(r'1:11\.8\.\d+\+maria~deb13', version):
+            candidates[name].add(version)
+    common = set.intersection(*candidates.values())
+    version = max(common, key=lambda v: Version(v.split(':')[1].split('+')[0]))
+    return {'repository': repository, 'version': version, 'key_sha256': hashlib.sha256(key).hexdigest()}
 
 
 def scanner_version():
@@ -248,6 +274,7 @@ def main():
             'framework_major': MAJOR, 'erpnext_tag': selected['erpnext']['ref'], 'apps': rows,
             'python': python, 'node': node, 'bench': bench, 'yarn': yarn,
             'security_overrides': security_versions(python),
+            'mariadb_client': mariadb_client(out),
             'python_image': image_digest(f'python:{python}-slim-trixie'),
             'node_image': image_digest(f'node:{node}-trixie-slim'),
             'mariadb_image': image_digest('mariadb:11.8'),
