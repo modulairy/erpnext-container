@@ -1,6 +1,13 @@
 x-app: &app
   image: ${TEST_IMAGE:?}
   pull_policy: never
+  init: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+    - seccomp=../resources/chromium-seccomp.json
+  shm_size: 256m
+  pids_limit: 256
   volumes:
     - sites:/home/frappe/frappe-bench/sites
     - logs:/home/frappe/frappe-bench/logs
@@ -41,6 +48,7 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
       - ./inside.py:/tests/inside.py:ro
+      - ./pdf_test.py:/tests/pdf_test.py:ro
   backend:
     <<: *app
     command: [backend]
@@ -73,6 +81,8 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
       - ./inside.py:/tests/inside.py:ro
+      - ./pdf_test.py:/tests/pdf_test.py:ro
+      - ${PDF_OUTPUT_DIR:-../.build/pdf}:/pdf-results
 
 volumes:
   sites:
