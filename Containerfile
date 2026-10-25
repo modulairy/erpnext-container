@@ -52,6 +52,9 @@ LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-cont
       org.opencontainers.image.version="${ERPNEXT_TAG}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}"
 COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
+USER root
+RUN /usr/local/bin/python -m pip uninstall -y pip \
+    && /home/frappe/frappe-bench/env/bin/python -m pip uninstall -y pip
 USER frappe
 WORKDIR /home/frappe/frappe-bench
 RUN test -x /usr/bin/chromium-headless-shell \
