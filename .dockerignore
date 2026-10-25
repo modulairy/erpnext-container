@@ -2,5 +2,6 @@
 !Containerfile
 !scripts/
 !scripts/build.py
+!scripts/security.py
 !resources/
 !resources/**
