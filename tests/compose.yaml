@@ -56,6 +56,31 @@ services:
     <<: *app
     depends_on: [backend, websocket]
     command: [frontend]
+  cache-origin:
+    <<: *app
+    entrypoint: [env/bin/python, /tests/cache_origin.py]
+    volumes:
+      - ./cache_origin.py:/tests/cache_origin.py:ro
+  cache-frontend:
+    <<: *app
+    depends_on: [cache-origin]
+    command: [frontend]
+    environment:
+      BACKEND: cache-origin:8000
+      SOCKETIO: cache-origin:8000
+      HTTP_REDIS_CACHE_ACTIVE: 'true'
+      HTTP_REDIS_CACHE_PUBLIC_TTL: '2'
+      HTTP_REDIS_CACHE_STATIC_TTL: '10'
+  cache-fail:
+    <<: *app
+    depends_on: [cache-origin]
+    command: [frontend]
+    environment:
+      BACKEND: cache-origin:8000
+      SOCKETIO: cache-origin:8000
+      HTTP_REDIS_CACHE_ACTIVE: 'true'
+      HTTP_REDIS_CACHE_URL: redis://127.0.0.1:1/0
+      HTTP_REDIS_CACHE_TIMEOUT_MS: '50'
   websocket:
     <<: *app
     command: [websocket]
@@ -83,6 +108,7 @@ services:
       - ./inside.py:/tests/inside.py:ro
       - ./pdf_test.py:/tests/pdf_test.py:ro
       - ${PDF_OUTPUT_DIR:-../.build/pdf}:/pdf-results
+      - ./cache_test.py:/tests/cache_test.py:ro
 
 volumes:
   sites:
