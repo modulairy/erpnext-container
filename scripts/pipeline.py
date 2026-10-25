@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+from collections import Counter
 import subprocess
 import sys
 
@@ -90,6 +91,16 @@ def scan():
     for args in checks:
         result = subprocess.run(trivy+args)
         failed |= result.returncode != 0
+    report = OUT/'vulnerabilities.json'
+    if report.exists():
+        data = json.loads(report.read_text(encoding='utf-8'))
+        findings = [v for row in data.get('Results', []) for v in row.get('Vulnerabilities', [])]
+        counts = Counter(v['Severity'] for v in findings)
+        summary = f"Image security findings: {dict(counts)}; {len({v['VulnerabilityID'] for v in findings})} unique vulnerability IDs.\n"
+        print(summary)
+        if os.environ.get('GITHUB_STEP_SUMMARY'):
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as handle:
+                handle.write(summary+'See the reports artifact for package details.\n')
     if failed:
         raise RuntimeError('Security gate failed; review security reports')
 
