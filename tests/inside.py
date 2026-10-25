@@ -85,11 +85,11 @@ def verify():
     response.raise_for_status()
     assert response.content
     with tempfile.TemporaryDirectory() as directory:
-        html, pdf = Path(directory)/'test.html', Path(directory)/'test.pdf'
-        html.write_text('<html><body>ERPNext PDF smoke test</body></html>')
-        command('wkhtmltopdf', '--quiet', str(html), str(pdf))
-        assert pdf.read_bytes().startswith(b'%PDF-')
-        from pypdf import PdfReader
+        pdf = Path(directory)/'test.pdf'
+        from pypdf import PdfReader, PdfWriter
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        writer.write(pdf)
         assert len(PdfReader(pdf).pages) == 1
         from PIL import Image
         for format in ('PNG', 'JPEG', 'WEBP'):
@@ -145,6 +145,8 @@ def verify():
     response.raise_for_status()
     # All three queue roles must execute an actual job, not merely start a process.
     print('PASS: authenticated API CRUD and application inventory', flush=True)
+    from pdf_test import verify_pdf
+    verify_pdf(session, base)
     jobs = [frappe.enqueue('frappe.utils.now', queue=q, job_name=f'container-smoke-{q}')
             for q in ('short', 'default', 'long')]
     deadline = time.monotonic() + 120
