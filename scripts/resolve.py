@@ -271,7 +271,8 @@ def os_backports():
     url = 'https://deb.debian.org/debian/dists/sid/main/source/Sources.xz'
     index = lzma.decompress(request(url)).decode()
     reviewed = {'acl': '2.4.0-1', 'ncurses': '6.6+20260608-2',
-                'perl': '5.42.3-1', 'systemd': '262.1-1'}
+                'perl': '5.42.3-1', 'systemd': '262.1-1', 'libsndfile': '1.2.2-4',
+                'libx11': '2:1.8.13-1', 'libxrender': '1:0.9.12-1', 'libxtst': '2:1.2.5-1'}
     result = {}
     for paragraph in index.split('\n\n'):
         fields = {}
@@ -297,6 +298,19 @@ def os_backports():
             result[name] = {'version': reviewed[name], 'files': files, 'index': url}
     if set(result) != set(reviewed):
         raise ValueError('Reviewed OS source version unavailable; review required')
+    for name, upstream, version, digest in (
+        ('libx11', 'libX11', '1.8.14', 'bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950'),
+        ('libxrender', 'libXrender', '0.9.13', '3fe88c609df6782e1e7af2e4de36b2563d70cd70ff7dcb1cda561ad64912bb64'),
+        ('libxtst', 'libXtst', '1.2.6', 'f94f0b37c07d80d877f3eda2c2405cc7e62aa9842f6310354aa349e3d66a4fe5')):
+        directory = upstream+'-'+version
+        result[name]['upstream'] = {'directory': directory, 'version': version,
+            'url': 'https://xorg.freedesktop.org/archive/individual/lib/'+directory+'.tar.xz',
+            'sha256': digest}
+        epoch = reviewed[name].split(':')[0]+':'
+        result[name]['binary_version'] = epoch+version+'-0+container1'
+    result['libsndfile'].update(binary_version='1.2.2-4+container1', patch={
+        'url': 'https://github.com/libsndfile/libsndfile/commit/cdadf9a65fdc1f28da9d235eb443d5f5e57010d2.patch',
+        'sha256': '19828cfdc17b80f13c8d1fcc8b828ea5c328071d91171c6d80f94a2e1499b719'})
     return result
 
 
