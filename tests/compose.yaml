@@ -1,0 +1,120 @@
+x-app: &app
+  image: ${TEST_IMAGE:?}
+  pull_policy: never
+  init: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+    - seccomp=../resources/chromium-seccomp.json
+  shm_size: 256m
+  pids_limit: 256
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
+  environment:
+    FRAPPE_SITE_NAME_HEADER: test.local
+    BACKEND: backend:8000
+    SOCKETIO: websocket:9000
+  networks: [test]
+
+services:
+  db:
+    image: ${MARIADB_IMAGE:?}
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:?}
+    command: [--character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci]
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 5s
+      retries: 60
+      timeout: 5s
+    networks: [test]
+  redis:
+    image: ${REDIS_IMAGE:?}
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      retries: 30
+      timeout: 3s
+    networks: [test]
+  setup:
+    <<: *app
+    profiles: [tools]
+    entrypoint: [env/bin/python, /tests/inside.py, setup]
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./inside.py:/tests/inside.py:ro
+      - ./pdf_test.py:/tests/pdf_test.py:ro
+  backend:
+    <<: *app
+    command: [backend]
+  frontend:
+    <<: *app
+    depends_on: [backend, websocket]
+    command: [frontend]
+  cache-origin:
+    <<: *app
+    entrypoint: [env/bin/python, /tests/cache_origin.py]
+    volumes:
+      - ./cache_origin.py:/tests/cache_origin.py:ro
+  cache-frontend:
+    <<: *app
+    depends_on: [cache-origin]
+    command: [frontend]
+    environment:
+      BACKEND: cache-origin:8000
+      SOCKETIO: cache-origin:8000
+      HTTP_REDIS_CACHE_ACTIVE: 'true'
+      HTTP_REDIS_CACHE_PUBLIC_TTL: '2'
+      HTTP_REDIS_CACHE_STATIC_TTL: '10'
+  cache-fail:
+    <<: *app
+    depends_on: [cache-origin]
+    command: [frontend]
+    environment:
+      BACKEND: cache-origin:8000
+      SOCKETIO: cache-origin:8000
+      HTTP_REDIS_CACHE_ACTIVE: 'true'
+      HTTP_REDIS_CACHE_URL: redis://127.0.0.1:1/0
+      HTTP_REDIS_CACHE_TIMEOUT_MS: '50'
+  websocket:
+    <<: *app
+    command: [websocket]
+  scheduler:
+    <<: *app
+    command: [scheduler]
+  worker-short:
+    <<: *app
+    command: [worker-short]
+  worker-default:
+    <<: *app
+    command: [worker-default]
+  worker-long:
+    <<: *app
+    command: [worker-long]
+  verify:
+    <<: *app
+    profiles: [tools]
+    entrypoint: [env/bin/python, /tests/inside.py, verify]
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./inside.py:/tests/inside.py:ro
+      - ./pdf_test.py:/tests/pdf_test.py:ro
+      - ${PDF_OUTPUT_DIR:-../.build/pdf}:/pdf-results
+      - ./cache_test.py:/tests/cache_test.py:ro
+      - ./zod_test.cjs:/tests/zod_test.cjs:ro
+      - ./os_test.py:/tests/os_test.py:ro
+
+volumes:
+  sites:
+  logs:
+networks:
+  test:
+    internal: true

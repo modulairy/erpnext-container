@@ -1,0 +1,8 @@
+*
+!Containerfile
+!scripts/
+!scripts/build.py
+!scripts/security.py
+!scripts/pdf_overlay.py
+!resources/
+!resources/**
