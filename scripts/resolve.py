@@ -201,6 +201,23 @@ def image_digest(tag):
     return tag + '@' + match[1]
 
 
+def published_runtime(repository, versions, suffix):
+    for version in sorted(versions, key=Version, reverse=True):
+        tag = version+suffix
+        try:
+            metadata = json.loads(request(f'https://hub.docker.com/v2/repositories/library/{repository}/tags/{tag}'))
+        except HTTPError as error:
+            if error.code != 404:
+                raise
+            print(f'Official runtime image not published yet: {repository}:{tag}', flush=True)
+            continue
+        if not any(image.get('os') == 'linux' and image.get('architecture') == 'amd64'
+                   for image in metadata.get('images', [])):
+            raise ValueError(f'Missing linux/amd64 runtime: {repository}:{tag}')
+        return version, image_digest(f'{repository}:{tag}')
+    raise ValueError(f'No published compatible {repository} runtime image')
+
+
 def mariadb_client(out):
     repository = 'https://deb.mariadb.org/11.8/debian'
     key = request('https://mariadb.org/mariadb_release_signing_key.pgp')
@@ -307,12 +324,13 @@ def main():
     py_tags = api('repos/python/cpython/git/matching-refs/tags/v3.14.')
     versions = [r['ref'].split('/')[-1][1:] for r in py_tags
                 if STABLE.fullmatch(r['ref'].split('/')[-1])]
-    python = max((v for v in versions if all(Version(v) in SpecifierSet(r['python']) for r in rows)),
-                 key=Version)
+    python, python_image = published_runtime('python',
+        [v for v in versions if all(Version(v) in SpecifierSet(r['python']) for r in rows)], '-slim-trixie')
     nodes = json.loads(request('https://nodejs.org/dist/index.json'))
-    node = next(n['version'][1:] for n in nodes if n['lts'] and n['version'].startswith('v24.')
+    node, node_image = published_runtime('node',
+        [n['version'][1:] for n in nodes if n['lts'] and n['version'].startswith('v24.')
                 and all(NpmSpec(spec).match(NodeVersion(n['version'][1:]))
-                        for r in rows for spec in r['node']))
+                        for r in rows for spec in r['node'])], '-trixie-slim')
     bench = pypi_latest('frappe-bench', python)
     yarn_data = json.loads(request('https://registry.npmjs.org/yarn'))
     yarn = max((v for v in yarn_data['versions'] if STABLE.fullmatch(v)
@@ -325,8 +343,8 @@ def main():
             'mariadb_client': mariadb_client(out),
             'curl_backport': curl_backport(),
             'os_backports': os_backports(),
-            'python_image': image_digest(f'python:{python}-slim-trixie'),
-            'node_image': image_digest(f'node:{node}-trixie-slim'),
+            'python_image': python_image,
+            'node_image': node_image,
             'mariadb_image': image_digest('mariadb:11.8'),
             'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': image_digest(f'aquasec/trivy:{trivy.lstrip("v")}'),
