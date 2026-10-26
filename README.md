@@ -32,6 +32,8 @@ Curl library packages use the newest common version from signed Debian 13 backpo
 
 Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard rejects new adapter consumers; runtime tests exercise the actual email and phone validators. ACL 2.4.0, ncurses 6.6, Perl 5.42.3 and systemd 262.1 source packages are rebuilt against Debian 13 in an isolated stage, with package tests enabled. Only the selected runtime packages are installed, including systemd's client libraries rather than its daemon. Signed Debian source indexes and locked source SHA256 values protect the inputs; source and binary provenance is retained in the image lock. These reviewed source versions fail closed if unavailable. No unstable binary repository is installed. A backported fix can still be reported by the distribution security feed; those findings remain blocking.
 
+The same stage packages upstream libX11 1.8.14, libXrender 0.9.13 and libXtst 1.2.6 with their locked Debian packaging and applies the reviewed libsndfile CVE-2026-37555 patch. Upstream archives and the patch have pinned SHA256 values; custom package versions use `+container1`. Strict symbol checks stay enabled. Integration tests load the X libraries and exercise libsndfile's real WAV IMA-ADPCM overflow path with a sparse metadata fixture, alongside the Chromium PDF tests.
+
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
 ## Runtime
