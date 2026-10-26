@@ -12,7 +12,7 @@ from packaging.version import Version
 
 def overlay(root, overrides):
     overrides = dict(overrides, javascript=javascript_versions(overrides, root.name))
-    changes = []
+    changes = prepare_helpdesk_zod(root)
     versions = {canonicalize_name(k): v for k, v in overrides['python'].items()}
     project = root/'pyproject.toml'
     text = project.read_text()
@@ -71,6 +71,35 @@ def overlay(root, overrides):
                         'action': 'regenerate from updated manifests'})
         locked.unlink()
     return changes
+
+
+def prepare_helpdesk_zod(root):
+    manifest = root/'desk/package.json'
+    if root.name != 'helpdesk' or not manifest.exists():
+        return []
+    data = json.loads(manifest.read_text())
+    # The released Desk declares this adapter but uses Zod directly. Fail closed
+    # if a later source starts consuming the adapter or adds unreviewed schemas.
+    expected = {'src/utils.ts', 'src/components/ticket/SetContactPhoneModal.vue'}
+    consumers = set()
+    for path in manifest.parent.rglob('*'):
+        if path.suffix not in ('.vue', '.ts', '.js', '.mjs', '.cjs') or 'node_modules' in path.parts:
+            continue
+        source = path.read_text()
+        if '@vee-validate/zod' in source or 'toTypedSchema' in source:
+            raise ValueError(f'Helpdesk now consumes the Zod adapter: {path}')
+        if re.search(r'''["']zod(?:/[^"']*)?["']''', source):
+            consumers.add(path.relative_to(manifest.parent).as_posix())
+            if re.search(r'\b(?:z|zod)\s*\.\s*(?:array|set|map)\s*\(', source):
+                raise ValueError(f'Helpdesk collection schemas require size-bound review: {path}')
+    if consumers != expected:
+        raise ValueError(f'Unreviewed Helpdesk Zod consumers: {sorted(consumers)}')
+    if '@vee-validate/zod' not in data.get('dependencies', {}):
+        return []
+    del data['dependencies']['@vee-validate/zod']
+    manifest.write_text(json.dumps(data, indent=2)+'\n')
+    return [{'file': 'desk/package.json', 'action': 'remove unused @vee-validate/zod adapter',
+             'verified_consumers': sorted(consumers)}]
 
 
 def javascript_versions(overrides, app):
