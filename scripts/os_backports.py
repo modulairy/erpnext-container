@@ -74,6 +74,9 @@ def main():
     run('useradd', '--create-home', 'package-builder')
     out = Path('/backports')
     out.mkdir()
+    build_out = Path('/build-deps')
+    build_out.mkdir()
+    build_wanted = {'libx11': {'libx11-dev'}, 'libxrender': {'libxrender-dev'}}
     evidence = {}
     wanted = {'acl': {'libacl1'},
               'ncurses': {'libtinfo6', 'libncurses6', 'libncursesw6', 'ncurses-base', 'ncurses-bin'},
@@ -101,18 +104,23 @@ def main():
         env = dict(os.environ, PATH='/usr/sbin:/usr/bin:/sbin:/bin')
         run('runuser', '-u', 'package-builder', '--', 'dpkg-buildpackage', '-b', '-us', '-uc', '-j2', cwd=root, env=env)
         installed = {}
+        build_installed = {}
         for deb in work.glob('*.deb'):
             package = subprocess.check_output(['dpkg-deb', '-f', str(deb), 'Package'], text=True).strip()
-            if package in wanted[name]:
-                shutil.copy2(deb, out/deb.name)
+            if package in wanted[name] or package in build_wanted.get(name, set()):
+                runtime = package in wanted[name]
+                shutil.copy2(deb, (out if runtime else build_out)/deb.name)
                 binary_version = subprocess.check_output(['dpkg-deb', '-f', str(deb), 'Version'], text=True).strip()
                 if binary_version != source.get('binary_version', version):
                     raise ValueError('Unexpected binary package version: '+package)
-                installed[package] = {'file': deb.name, 'version': binary_version,
+                (installed if runtime else build_installed)[package] = {'file': deb.name, 'version': binary_version,
                                       'sha256': hashlib.sha256(deb.read_bytes()).hexdigest()}
         if set(installed) != wanted[name]:
             raise ValueError('Missing backport binary packages: '+name)
-        evidence[name] = {'source': source, 'binaries': installed, 'tests_disabled': False}
+        if set(build_installed) != build_wanted.get(name, set()):
+            raise ValueError('Missing matching builder packages: '+name)
+        evidence[name] = {'source': source, 'binaries': installed,
+                          'build_only_binaries': build_installed, 'tests_disabled': False}
         shutil.rmtree(work)
     (out/'provenance.json').write_text(json.dumps(evidence, indent=2)+'\n')
 
