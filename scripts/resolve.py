@@ -249,6 +249,40 @@ def scanner_version():
     return max(versions, key=Version)
 
 
+def os_backports():
+    # Reviewed ABI-compatible source-package lines; never install sid binaries.
+    url = 'https://deb.debian.org/debian/dists/sid/main/source/Sources.xz'
+    index = lzma.decompress(request(url)).decode()
+    reviewed = {'acl': '2.4.0-1', 'ncurses': '6.6+20260608-2',
+                'perl': '5.42.3-1', 'systemd': '262.1-1'}
+    result = {}
+    for paragraph in index.split('\n\n'):
+        fields = {}
+        key = None
+        for line in paragraph.splitlines():
+            if line.startswith(' ') and key:
+                fields[key] += '\n'+line.strip()
+            elif ': ' in line or line.endswith(':'):
+                key, value = line.split(':', 1)
+                fields[key] = value.strip()
+        name = fields.get('Package')
+        if name in reviewed and fields.get('Version') == reviewed[name]:
+            files = {}
+            for line in fields['Checksums-Sha256'].splitlines():
+                if not line.strip():
+                    continue
+                digest, size, filename = line.split()
+                if not re.fullmatch('[a-f0-9]{64}', digest) or Path(filename).name != filename:
+                    raise ValueError('Invalid OS source metadata')
+                files[filename] = digest
+            if not any(p.endswith('.dsc') for p in files):
+                raise ValueError('Missing source descriptor')
+            result[name] = {'version': reviewed[name], 'files': files, 'index': url}
+    if set(result) != set(reviewed):
+        raise ValueError('Reviewed OS source version unavailable; review required')
+    return result
+
+
 def main():
     out = Path(os.environ.get('BUILD_DIR', '.build')).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -290,6 +324,7 @@ def main():
             'security_overrides': security_versions(python),
             'mariadb_client': mariadb_client(out),
             'curl_backport': curl_backport(),
+            'os_backports': os_backports(),
             'python_image': image_digest(f'python:{python}-slim-trixie'),
             'node_image': image_digest(f'node:{node}-trixie-slim'),
             'mariadb_image': image_digest('mariadb:11.8'),
