@@ -30,6 +30,8 @@ Plyr stays on 3.7.8 because 3.8 changes the deep import used by this Frappe rele
 
 Curl library packages use the newest common version from signed Debian 13 backports. The installed MariaDB client and curl versions are checked against the image lock during integration tests.
 
+Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard rejects new adapter consumers; runtime tests exercise the actual email and phone validators. ACL 2.4.0, ncurses 6.6, Perl 5.42.3 and systemd 262.1 source packages are rebuilt against Debian 13 in an isolated stage, with package tests enabled. Only the selected runtime packages are installed, including systemd's client libraries rather than its daemon. Signed Debian source indexes and locked source SHA256 values protect the inputs; source and binary provenance is retained in the image lock. These reviewed source versions fail closed if unavailable. No unstable binary repository is installed. A backported fix can still be reported by the distribution security feed; those findings remain blocking.
+
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
 ## Runtime
