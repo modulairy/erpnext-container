@@ -45,6 +45,34 @@ def setup():
 
 
 def verify():
+    command('node', '/tests/zod_test.cjs')
+    for source in LOCK['os_backport_provenance'].values():
+        for name in source['binaries']:
+            actual = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', name], text=True)
+            assert actual == source['binaries'][name]['version'], (name, actual)
+    import ctypes
+    import curses
+    acl = ctypes.CDLL('libacl.so.1')
+    acl.acl_from_text.restype = ctypes.c_void_p
+    acl.acl_valid.argtypes = [ctypes.c_void_p]
+    acl.acl_free.argtypes = [ctypes.c_void_p]
+    pointer = acl.acl_from_text(b'user::rw-,group::r--,other::---')
+    assert pointer and acl.acl_valid(pointer) == 0
+    assert acl.acl_free(pointer) == 0
+    curses.setupterm('xterm')
+    assert curses.tigetstr('clear')
+    systemd = ctypes.CDLL('libsystemd.so.0')
+    assert systemd.sd_booted() in (0, 1)
+    udev = ctypes.CDLL('libudev.so.1')
+    udev.udev_new.restype = ctypes.c_void_p
+    udev.udev_unref.argtypes = [ctypes.c_void_p]
+    context = udev.udev_new()
+    assert context
+    udev.udev_unref(context)
+    command('perl', '-MArchive::Tar', '-e',
+            'use v5.42.3; my $t=Archive::Tar->new; $t->add_data("test.txt","ok"); '
+            'die "tar roundtrip" unless $t->get_content("test.txt") eq "ok";')
+    print('PASS: backport provenance and ACL/ncurses/systemd/udev/Perl runtime checks', flush=True)
     for package in ('mariadb-client', 'mariadb-client-core', 'mariadb-common', 'libmariadb3'):
         installed = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', package], text=True)
         assert installed == LOCK['mariadb_client']['version'], (package, installed)
