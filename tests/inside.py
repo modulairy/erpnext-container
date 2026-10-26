@@ -48,6 +48,10 @@ def verify():
     command('node', '/tests/zod_test.cjs')
     command('python', '/tests/os_test.py')
     for source in LOCK['os_backport_provenance'].values():
+        for name in source['build_only_binaries']:
+            status = subprocess.run(['dpkg-query', '-W', '-f=${db:Status-Status}', name],
+                                    text=True, capture_output=True)
+            assert status.stdout.strip() != 'installed', 'Build-only package remains: '+name
         for name in source['binaries']:
             actual = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', name], text=True)
             assert actual == source['binaries'][name]['version'], (name, actual)
