@@ -17,6 +17,21 @@ def row(name, version, deps=None, required=None):
 
 
 class ResolverTests(unittest.TestCase):
+    def test_runtime_requires_published_image_and_only_skips_not_found(self):
+        available = json.dumps({'images': [{'os': 'linux', 'architecture': 'amd64'}]}).encode()
+        missing = resolve.HTTPError('test', 404, 'not found', {}, None)
+        with patch.object(resolve, 'request', side_effect=[missing, available]), \
+                patch.object(resolve, 'image_digest', return_value='locked') as digest:
+            self.assertEqual(resolve.published_runtime('python', ['3.14.9', '3.14.10'], '-slim-trixie'),
+                             ('3.14.9', 'locked'))
+            digest.assert_called_once_with('python:3.14.9-slim-trixie')
+        with patch.object(resolve, 'request', side_effect=resolve.HTTPError('test', 403, 'denied', {}, None)):
+            with self.assertRaises(resolve.HTTPError):
+                resolve.published_runtime('python', ['3.14.10'], '-slim-trixie')
+        with patch.object(resolve, 'request', return_value=b'{"images":[]}'):
+            with self.assertRaisesRegex(ValueError, 'linux/amd64'):
+                resolve.published_runtime('python', ['3.14.10'], '-slim-trixie')
+
     def test_os_backports_lock_exact_sources_and_fail_on_missing_version(self):
         index = ''.join('Package: '+name+'\nVersion: '+version+'\nChecksums-Sha256:\n '+
                         'a'*64+' 123 '+name+'.dsc\n\n'
