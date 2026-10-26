@@ -17,6 +17,18 @@ def row(name, version, deps=None, required=None):
 
 
 class ResolverTests(unittest.TestCase):
+    def test_os_backports_lock_exact_sources_and_fail_on_missing_version(self):
+        index = ''.join('Package: '+name+'\nVersion: '+version+'\nChecksums-Sha256:\n '+
+                        'a'*64+' 123 '+name+'.dsc\n\n'
+                        for name, version in [('acl', '2.4.0-1'), ('ncurses', '6.6+20260608-2'),
+                                              ('perl', '5.42.3-1'), ('systemd', '262.1-1')])
+        with patch.object(resolve, 'request', return_value=lzma.compress(index.encode())):
+            selected = resolve.os_backports()
+        self.assertEqual(selected['acl']['files']['acl.dsc'], 'a'*64)
+        with patch.object(resolve, 'request', return_value=lzma.compress(index.replace('2.4.0-1', '2.5.0-1').encode())):
+            with self.assertRaisesRegex(ValueError, 'review required'):
+                resolve.os_backports()
+
     def test_curl_backport_requires_common_version_and_sorts_numerically(self):
         packages = ('curl', 'libcurl3t64-gnutls', 'libcurl4-gnutls', 'libcurl4t64')
         index = ''.join(f'Package: {name}\nVersion: 8.{minor}.0-2~bpo13+1\n\n'
