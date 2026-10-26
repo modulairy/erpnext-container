@@ -2,6 +2,10 @@
 ARG PYTHON_IMAGE
 ARG NODE_IMAGE
 FROM ${NODE_IMAGE} AS node
+FROM ${PYTHON_IMAGE} AS os-backports
+COPY --from=resolved lock.json /opt/build/lock.json
+COPY scripts/os_backports.py /opt/build/os_backports.py
+RUN python /opt/build/os_backports.py
 FROM ${PYTHON_IMAGE} AS base
 ARG BENCH_VERSION
 ARG YARN_VERSION
@@ -10,6 +14,7 @@ ENV PATH=/home/frappe/frappe-bench/env/bin:/usr/local/bin:${PATH} \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=resolved lock.json /opt/build/lock.json
+COPY --from=os-backports /backports /opt/os-backports
 RUN useradd -m -u 1000 -s /bin/bash frappe \
     && apt-get update \
     && apt-get upgrade -y --no-install-recommends \
@@ -17,6 +22,9 @@ RUN useradd -m -u 1000 -s /bin/bash frappe \
        libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
        mariadb-client libmariadb3 libpq5 libmagic1 media-types tzdata-legacy \
        chromium-headless-shell fonts-dejavu-core libnginx-mod-http-lua libnginx-mod-http-srcache-filter lua-cjson \
+    && apt-get install -y --no-remove --no-install-recommends /opt/os-backports/*.deb \
+    && dpkg --purge libperl5.40 perl-modules-5.40 \
+    && rm -f /opt/os-backports/*.deb \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["security_overrides"]["python"]; subprocess.run(["python","-m","pip","install","--upgrade"]+[k+"=="+p[k] for k in ("pip","setuptools","urllib3")],check=True)' \
