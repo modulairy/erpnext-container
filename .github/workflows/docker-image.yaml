@@ -121,7 +121,6 @@ jobs:
           tag=$(jq -er '.erpnext_tag | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' verified/lock.json)
           image="ghcr.io/modulairy/erpnext:$tag"
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-          trap 'docker logout ghcr.io' EXIT
           docker tag "$actual" "$image"
           docker push "$image"
           digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)
@@ -141,3 +140,6 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           sbom-path: verified/sbom.cdx.json
           push-to-registry: true
+      - name: Logout from GHCR
+        if: ${{ always() }}
+        run: docker logout ghcr.io
