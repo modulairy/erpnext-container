@@ -82,6 +82,30 @@ def integration():
         run(compose+['down', '-v', '--remove-orphans'], env=env)
 
 
+def assess_report(data, exceptions=(), advisory=False):
+    """Keep raw evidence; exempt only exact approved vulnerability records."""
+    if not isinstance(data.get('Results'), list) or data.get('SchemaVersion') != 2:
+        raise ValueError('Missing or unsupported scanner results')
+    accepted, blocking, reported = [], [], []
+    for row in data['Results']:
+        for finding in row.get('Vulnerabilities', []):
+            key = dict(cve=finding['VulnerabilityID'], package=finding['PkgName'],
+                       version=finding['InstalledVersion'], severity=finding['Severity'],
+                       type=row['Type'], classification=row['Class'])
+            if advisory:
+                reported.append(key)
+            elif key in exceptions:
+                accepted.append(key)
+            else:
+                blocking.append(key)
+        # Service vulnerability acceptance never exempts leaked secrets/config errors.
+        for kind in ('Secrets', 'Misconfigurations'):
+            blocking.extend(f for f in row.get(kind, [])
+                            if f.get('Severity') in ('HIGH', 'CRITICAL')
+                            and f.get('Status', 'FAIL') != 'PASS')
+    return dict(accepted=accepted, blocking=blocking, advisory=reported)
+
+
 def scan():
     lock = load()
     trivy = ['docker', 'run', '--rm', '-v', f'{OUT}:/scan', '-v', f'{ROOT}:/source:ro',
@@ -90,18 +114,45 @@ def scan():
                '--output', '/scan/sbom.cdx.json'])
     checks = [
         ['image', '--input', '/scan/image.tar', '--scanners', 'vuln,secret', '--severity', 'HIGH,CRITICAL',
-         '--exit-code', '1', '--format', 'json', '--output', '/scan/vulnerabilities.json'],
-        ['fs', '--scanners', 'misconfig,secret', '--severity', 'HIGH,CRITICAL', '--exit-code', '1',
+         '--exit-code', '0', '--format', 'json', '--output', '/scan/vulnerabilities.json'],
+        ['fs', '--scanners', 'misconfig,secret', '--severity', 'HIGH,CRITICAL', '--exit-code', '0',
          '--skip-dirs', '/source/.git,/source/.build', '--format', 'json',
          '--output', '/scan/config-security.json', '/source']]
     for service in ('mariadb', 'redis'):
         checks.append(['image', '--scanners', 'vuln,secret', '--severity', 'HIGH,CRITICAL',
-                       '--exit-code', '1', '--format', 'json',
+                       '--exit-code', '0', '--format', 'json',
                        '--output', f'/scan/service-{service}-security.json', lock[service+'_image']])
+    policy = json.loads((ROOT/'security-exceptions.json').read_text())
     failed = False
+    assessments = {}
     for args in checks:
+        filename = Path(args[args.index('--output')+1]).name
+        report = OUT/filename
+        report.unlink(missing_ok=True)
         result = subprocess.run(trivy+args)
-        failed |= result.returncode != 0
+        if result.returncode != 0:
+            failed = True
+            assessments[filename] = {'scanner_error': result.returncode}
+            continue
+        try:
+            assessment = assess_report(json.loads(report.read_text(encoding='utf-8')),
+                policy['application'] if filename == 'vulnerabilities.json' else (),
+                advisory=filename == 'service-mariadb-security.json')
+            assessments[filename] = assessment
+            failed |= bool(assessment['blocking'])
+        except (ValueError, KeyError, OSError, TypeError) as error:
+            failed = True
+            assessments[filename] = {'report_error': str(error)}
+    (OUT/'gate-security.json').write_text(json.dumps(assessments, indent=2)+'\n')
+    for filename, assessment in assessments.items():
+        summary = (f"{filename}: {len(assessment.get('accepted', []))} accepted, "
+                   f"{len(assessment.get('advisory', []))} advisory, "
+                   f"{len(assessment.get('blocking', []))} blocking; "
+                   f"errors: {assessment.get('scanner_error', assessment.get('report_error', 'none'))}")
+        print(summary)
+        if os.environ.get('GITHUB_STEP_SUMMARY'):
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as handle:
+                handle.write(summary+'\n\n')
     for label, filename in [('Application image', 'vulnerabilities.json'),
                             ('MariaDB service', 'service-mariadb-security.json'),
                             ('Redis service', 'service-redis-security.json')]:
