@@ -23,6 +23,7 @@ def install():
         raise ValueError('Unexpected application set')
     sources.mkdir()
     lock['source_overlays'] = {}
+    lock['os_backport_provenance'] = json.loads(Path('/opt/os-backports/provenance.json').read_text())
     for app in lock['apps']:
         name, sha = app['name'], app['sha']
         if app['url'] != f'https://github.com/frappe/{name}.git' or not re.fullmatch('[0-9a-f]{40}', sha):
