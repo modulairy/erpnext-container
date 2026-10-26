@@ -5,10 +5,31 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
-from security import overlay, prune_build_tools, verify_overrides
+from security import overlay, prune_build_tools, verify_overrides, prepare_helpdesk_zod
 
 
 class SecurityTests(unittest.TestCase):
+    def test_unused_zod_adapter_removal_rejects_new_consumers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)/'helpdesk'
+            desk = root/'desk'
+            (desk/'src/components/ticket').mkdir(parents=True)
+            manifest = desk/'package.json'
+            original = '{"dependencies":{"@vee-validate/zod":"^4.8.2","zod":"^3.21.4"}}'
+            manifest.write_text(original)
+            (desk/'src/utils.ts').write_text('import zod from "zod";')
+            (desk/'src/components/ticket/SetContactPhoneModal.vue').write_text('import {z} from "zod";')
+            prepare_helpdesk_zod(root)
+            self.assertNotIn('@vee-validate/zod', json.loads(manifest.read_text())['dependencies'])
+            manifest.write_text(original)
+            (desk/'src/new.ts').write_text('import {toTypedSchema} from "@vee-validate/zod";')
+            with self.assertRaisesRegex(ValueError, 'consumes the Zod adapter'):
+                prepare_helpdesk_zod(root)
+            self.assertEqual(manifest.read_text(), original)
+            manifest.write_text('{"dependencies":{"zod":"^4.6.7"}}')
+            with self.assertRaisesRegex(ValueError, 'consumes the Zod adapter'):
+                prepare_helpdesk_zod(root)
+
     def test_app_compatibility_range_does_not_weaken_other_app_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             bench = Path(directory)
