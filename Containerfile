@@ -48,17 +48,18 @@ COPY resources/nginx-template.conf /templates/nginx/frappe.conf.template
 FROM base AS dependencies
 USER root
 ARG YARN_VERSION
+COPY --from=os-backports /build-deps /opt/os-build-deps
 RUN pip install --no-cache-dir packaging==26.3
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && npm install --global "yarn@${YARN_VERSION}"
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential pkg-config libpq-dev \
+    && apt-get install -y --no-remove --no-install-recommends /opt/os-build-deps/*.deb build-essential pkg-config libpq-dev \
        libffi-dev liblcms2-dev libldap2-dev libsasl2-dev libtiff-dev \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; subprocess.run(["apt-get","install","-y","--no-install-recommends","libmariadb-dev="+p["version"]],check=True)' \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /opt/os-build-deps
 COPY scripts/build.py scripts/security.py scripts/pdf_overlay.py /opt/build/
 COPY resources/chrome_pdf_generator.py resources/pdf_resources.py /opt/build/pdf/
 USER frappe
