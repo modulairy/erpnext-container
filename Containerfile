@@ -60,7 +60,8 @@ RUN apt-get update \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; subprocess.run(["apt-get","install","-y","--no-install-recommends","libmariadb-dev="+p["version"]],check=True)' \
     && rm -rf /var/lib/apt/lists/* /opt/os-build-deps
-COPY scripts/build.py scripts/security.py scripts/pdf_overlay.py /opt/build/
+COPY scripts/build.py scripts/security.py scripts/pdf_overlay.py scripts/community_overlay.py /opt/build/
+COPY patches/ /opt/build/patches/
 COPY resources/chrome_pdf_generator.py resources/pdf_resources.py /opt/build/pdf/
 USER frappe
 RUN python /opt/build/build.py install

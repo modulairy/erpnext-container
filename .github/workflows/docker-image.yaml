@@ -95,11 +95,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
       packages: write
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Download verified image
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -140,6 +143,11 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           sbom-path: verified/sbom.cdx.json
           push-to-registry: true
+      - name: Create GitHub tag and Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: python3 scripts/release.py
       - name: Logout from GHCR
         if: ${{ always() }}
         run: docker logout ghcr.io

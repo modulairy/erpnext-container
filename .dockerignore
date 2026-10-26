@@ -4,5 +4,8 @@
 !scripts/build.py
 !scripts/security.py
 !scripts/pdf_overlay.py
+!scripts/community_overlay.py
+!patches/
+!patches/**
 !resources/
 !resources/**

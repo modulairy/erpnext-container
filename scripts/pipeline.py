@@ -55,12 +55,12 @@ def integration():
             for args in (['up', '-d', '--wait', '--wait-timeout', '300', 'db', 'redis'],
                          ['run', '--rm', 'setup'],
                          ['up', '-d', 'backend', 'frontend', 'websocket', 'scheduler',
-                          'worker-short', 'worker-default', 'worker-long',
+                          'worker-short', 'worker-default', 'worker-long', 'worker-long-peer',
                           'cache-origin', 'cache-frontend', 'cache-fail'],
                          ['run', '--rm', 'verify']):
                 run(compose+args, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=1800)
             for service in ('backend', 'frontend', 'websocket', 'scheduler',
-                            'worker-short', 'worker-default', 'worker-long'):
+                            'worker-short', 'worker-default', 'worker-long', 'worker-long-peer'):
                 ids = subprocess.check_output(compose+['ps', '-q', service], env=env, text=True).strip()
                 if not ids:
                     raise RuntimeError(f'{service} exited')
@@ -107,8 +107,18 @@ def assess_report(data, exceptions=(), advisory=False):
 
 
 def scan():
+    cache = 'erpnext-scan-'+secrets.token_hex(4)
+    run(['docker', 'volume', 'create', cache])
+    try:
+        scan_with_cache(cache)
+    finally:
+        run(['docker', 'volume', 'rm', cache])
+
+
+def scan_with_cache(cache):
     lock = load()
     trivy = ['docker', 'run', '--rm', '-v', f'{OUT}:/scan', '-v', f'{ROOT}:/source:ro',
+             '-v', f'{cache}:/root/.cache/trivy',
              lock['trivy_image']]
     run(trivy+['image', '--input', '/scan/image.tar', '--format', 'cyclonedx',
                '--output', '/scan/sbom.cdx.json'])

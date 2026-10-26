@@ -48,8 +48,9 @@ def configure(bench, env):
     sites = bench/'sites'
     common_path = sites/'common_site_config.json'
     common = json.loads(common_path.read_text()) if common_path.exists() else {}
+    allow_symlinks = str(env.get('FRAPPE_ALLOW_SYMLINK_SITES', common.get('allow_symlink_sites', False))).lower() in ('true', '1')
     for directory in sites.iterdir():
-        if not directory.is_dir() or directory.is_symlink() or not re.fullmatch(r'[A-Za-z0-9_.-]+', directory.name):
+        if not directory.is_dir() or (directory.is_symlink() and not allow_symlinks) or not re.fullmatch(r'[A-Za-z0-9_.-]+', directory.name):
             continue
         path = directory/'site_config.json'
         if not path.is_file():

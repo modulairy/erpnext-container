@@ -96,6 +96,9 @@ services:
   worker-long:
     <<: *app
     command: [worker-long]
+  worker-long-peer:
+    <<: *app
+    command: [worker-long]
   verify:
     <<: *app
     profiles: [tools]
@@ -111,6 +114,7 @@ services:
       - ./cache_test.py:/tests/cache_test.py:ro
       - ./zod_test.cjs:/tests/zod_test.cjs:ro
       - ./os_test.py:/tests/os_test.py:ro
+      - ./community_test.py:/tests/community_test.py:ro
 
 volumes:
   sites:

@@ -315,6 +315,7 @@ def os_backports():
 
 
 def main():
+    from community_overlay import selected_patches
     out = Path(os.environ.get('BUILD_DIR', '.build')).resolve()
     out.mkdir(parents=True, exist_ok=True)
     options = []
@@ -364,6 +365,7 @@ def main():
             'trivy_image': image_digest(f'aquasec/trivy:{trivy.lstrip("v")}'),
             'pdf_engine': 'sandboxed-system-chromium'}
     lock['redis_lua'] = redis_lua(out)
+    lock['community_patches'] = selected_patches(rows)
     (out/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     print(json.dumps({k: lock[k] for k in ('erpnext_tag', 'python', 'node', 'bench')}))
     for row in rows:

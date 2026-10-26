@@ -1,0 +1,38 @@
+{
+  "frappe": {
+    "version": "16.53.0",
+    "upstream_pr": "https://github.com/frappe/frappe/pull/44199",
+    "upstream_revision": "636d392be7051d5e855008ccf541db09b109aa63",
+    "patch": "frappe.patch",
+    "sha256": "1081ebd0d83fa41e2cc7d428745871c665247efe793c269348f2b14debf23d3e",
+    "expected": {
+      "frappe/config.py": "70047184964bd113ff99e5e91eac0f4233299a65254c950b42a0bf3d8a87aab0",
+      "frappe/utils/__init__.py": "b4e95c7a298f97f0bb02b48b9e696212665a568ad2a981ddd427335a50679e92"
+    },
+    "output": {
+      "frappe/config.py": "1a4dd5affaeb9884ff04f4a1e20eafcbdde1415d039fec6496af3baa59ee2aeb",
+      "frappe/utils/__init__.py": "4985c074301b580c016204fc4f115c091281c58558a4b62bf878a7e9caa486b8"
+    }
+  },
+  "helpdesk": {
+    "version": "1.31.0",
+    "upstream_pr": "https://github.com/frappe/helpdesk/pull/3914",
+    "upstream_revision": "e93c6b0a1336917b0009f960f969e2be35b6d478",
+    "patch": "helpdesk.patch",
+    "sha256": "59390e24ecd64e54e8d9ed72a61666a779ea9e874414a098b559fa8a9a0fd151",
+    "expected": {
+      "helpdesk/hooks.py": "02bf3cd4712888328aacfc97ba4d772125d635bb04f75fd4bbb8ea6697709100",
+      "helpdesk/api/search.py": "b47001abb46b0bcfe4c9e92e89dcf929b63faafefc4a3aa8f7732c4060c16f93",
+      "helpdesk/ticket_search.py": null,
+      "helpdesk/search_redis.py": null,
+      "helpdesk/tests/test_ticket_search_backend.py": null
+    },
+    "output": {
+      "helpdesk/hooks.py": "d43f5ea6363afd987fcc41d807031f281cdc4171f263ada9bdd76e30f900917a",
+      "helpdesk/api/search.py": "df772bdcdc817da6b5c19244f4fcf560b02d3274aa453734587872f573a3bf4b",
+      "helpdesk/ticket_search.py": "d021457df1503d432f2a586a7164741ed38deb6cc2a015b03e6e32d435510c11",
+      "helpdesk/search_redis.py": "39248cf5d0032d9cc3527805082e7ae3ad4440b603f57e7de3727059b637c875",
+      "helpdesk/tests/test_ticket_search_backend.py": "b87c57f0b5e126ec5595e615bb3ab969b2477e18813aa9e0d83b4a7cafde9469"
+    }
+  }
+}
