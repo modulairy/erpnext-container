@@ -36,10 +36,14 @@ class ResolverTests(unittest.TestCase):
         index = ''.join('Package: '+name+'\nVersion: '+version+'\nChecksums-Sha256:\n '+
                         'a'*64+' 123 '+name+'.dsc\n\n'
                         for name, version in [('acl', '2.4.0-1'), ('ncurses', '6.6+20260608-2'),
-                                              ('perl', '5.42.3-1'), ('systemd', '262.1-1')])
+                                              ('perl', '5.42.3-1'), ('systemd', '262.1-1'),
+                                              ('libsndfile', '1.2.2-4'), ('libx11', '2:1.8.13-1'),
+                                              ('libxrender', '1:0.9.12-1'), ('libxtst', '2:1.2.5-1')])
         with patch.object(resolve, 'request', return_value=lzma.compress(index.encode())):
             selected = resolve.os_backports()
         self.assertEqual(selected['acl']['files']['acl.dsc'], 'a'*64)
+        self.assertEqual(selected['libx11']['binary_version'], '2:1.8.14-0+container1')
+        self.assertEqual(selected['libsndfile']['binary_version'], '1.2.2-4+container1')
         with patch.object(resolve, 'request', return_value=lzma.compress(index.replace('2.4.0-1', '2.5.0-1').encode())):
             with self.assertRaisesRegex(ValueError, 'review required'):
                 resolve.os_backports()
