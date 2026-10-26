@@ -211,11 +211,15 @@ def published_runtime(repository, versions, suffix):
                 raise
             print(f'Official runtime image not published yet: {repository}:{tag}', flush=True)
             continue
+        images = metadata.get('images')
+        if not isinstance(images, list) or any(not isinstance(image, dict) for image in images):
+            raise ValueError(f'Invalid runtime image metadata: {repository}:{tag}')
         if not any(image.get('os') == 'linux' and image.get('architecture') == 'amd64'
-                   for image in metadata.get('images', [])):
-            raise ValueError(f'Missing linux/amd64 runtime: {repository}:{tag}')
+                   for image in images):
+            print(f'Official linux/amd64 runtime not published yet: {repository}:{tag}', flush=True)
+            continue
         return version, image_digest(f'{repository}:{tag}')
-    raise ValueError(f'No published compatible {repository} runtime image')
+    raise ValueError(f'No published compatible linux/amd64 {repository} runtime image')
 
 
 def mariadb_client(out):
