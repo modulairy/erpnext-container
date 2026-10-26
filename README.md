@@ -14,7 +14,7 @@ The GHCR tag is the selected ERPNext release, for example `v16.52.1`. Rebuilding
 
 ## Manual build and publication
 
-In **Actions Ã¢â€ â€™ Community ERPNext Ã¢â€ â€™ Run workflow**, choose a branch and leave `publish` disabled for validation. After reviewing and merging the PR, run on `main` with `publish` enabled to publish. The repository's `GITHUB_TOKEN` needs GHCR package write access; the first package may need its visibility set to public in GitHub package settings. No personal registry token is required.
+In **Actions > Community ERPNext > Run workflow**, choose a branch and leave `publish` disabled for validation. After reviewing and merging the PR, run on `main` with `publish` enabled to publish. The repository's `GITHUB_TOKEN` needs GHCR package write access; the first package may need its visibility set to public in GitHub package settings. No personal registry token is required.
 
 Every build is followed by an isolated site installation and migration for every included app, HTTP/login/API CRUD checks, static asset requests, websocket connectivity, real jobs on all three worker queues and runtime process checks. MariaDB and Redis are temporary test services, with generated credentials and no production access. Reports and sanitized logs are retained for 14 days. Temporary containers, networks and volumes are removed on completion/failure.
 
@@ -35,6 +35,23 @@ Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard reject
 The same stage packages upstream libX11 1.8.14, libXrender 0.9.13 and libXtst 1.2.6 with their locked Debian packaging and applies the reviewed libsndfile CVE-2026-37555 patch. Upstream archives and the patch have pinned SHA256 values; custom package versions use `+container1`. Strict symbol checks stay enabled. Integration tests load the X libraries and exercise libsndfile's real WAV IMA-ADPCM overflow path with a sparse metadata fixture, alongside the Chromium PDF tests.
 
 The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
+
+After a successful push and provenance/SBOM attestations, the publish job creates a Git tag and GitHub Release containing the image digest, source revision, locked applications and Actions evidence. The first release uses the ERPNext tag; rebuilding that ERPNext version from a different source revision uses `<ERPNext-tag>-build.<Actions-run-number>`. Existing source tags are never moved. The GHCR tag remains the ERPNext tag. Only the publish job has the repository write permission needed for tags/releases. Logout runs last, including on failure.
+
+## Reviewed Frappe 16 backports
+
+`patches/manifest.json` records the source revisions, input/output file hashes and patch checksums for the opt-in [Frappe symlink discovery change](https://github.com/frappe/frappe/pull/44199) and [Helpdesk Redis ticket search](https://github.com/frappe/helpdesk/pull/3914). These are container backports, not upstream-merged features. They are reviewed for Frappe 16.53.0 and Helpdesk 1.31.0. Resolution/build fails on an unreviewed version or changed source instead of omitting a patch. Applied provenance is recorded in `image-lock.json`.
+
+Symlink site discovery is disabled by default. Set `allow_symlink_sites: true` in `common_site_config.json` or set `FRAPPE_ALLOW_SYMLINK_SITES=true`; ENV wins, including explicit false. Only configured directory targets are included. Backend, scheduler, workers and frontend must share the same readable target paths. Manage site directories and links as trusted operator configuration; aliases of one database are not separate tenants. HTTP cache discovery honors the same opt-in setting; restart frontend after configuration or link changes.
+
+Ticket search defaults to SQLite. To opt into Redis, use the site's existing `redis_cache` with Redis 8 Search supporting `FT.AGGREGATE ADDSCORES` and cursors:
+
+```sh
+bench --site example.com set-config helpdesk_search_backend redis
+bench --site example.com execute helpdesk.ticket_search.build_index
+```
+
+Keep the scheduler and long workers running. Indexing happens after database commit; reads can briefly lag writes. Missing indexes are rebuilt through scheduled recovery. Force rebuilding temporarily makes ticket search unavailable. Ordinary site cache clearing preserves search keys; a full Redis flush removes them and requires rebuilding. Redis ranking/prefix matching differs from SQLite and has no SQLite spelling correction. Capacity, persistence and eviction must account for index data. Article search retains its existing implementation. Return to SQLite by changing the setting to `sqlite` and rebuilding on storage with SQLite-compatible locking; existing SQLite data is not deleted automatically. Frappe 16 uses its supported bounded background retry mechanism rather than the develop-only `rq_retry` argument.
 
 ## Runtime
 

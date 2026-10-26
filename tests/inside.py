@@ -23,7 +23,7 @@ def setup():
     config = {'db_host': 'db', 'db_port': 3306, 'redis_cache': 'redis://redis:6379/0',
               'redis_queue': 'redis://redis:6379/1', 'redis_socketio': 'redis://redis:6379/1',
               'socketio_port': 9000, 'webserver_host': 'backend', 'webserver_port': 8000, 'default_site': SITE,
-              'serve_default_site': True}
+              'serve_default_site': True, 'allow_symlink_sites': True, 'scheduler_tick_interval': 1}
     Path('sites/common_site_config.json').write_text(json.dumps(config))
     command('bench', 'new-site', SITE, '--db-root-password', os.environ['DB_PASSWORD'],
             '--admin-password', os.environ['ADMIN_PASSWORD'], '--mariadb-user-host-login-scope', '%')
@@ -32,12 +32,29 @@ def setup():
     site_config = Path('sites')/SITE/'site_config.json'
     values = json.loads(site_config.read_text())
     values.setdefault('encryption_key', Fernet.generate_key().decode())
+    values['helpdesk_search_backend'] = 'redis'
+    values['allow_tests'] = True
     site_config.write_text(json.dumps(values))
     for app in LOCK['apps']:
         if app['name'] != 'frappe':
             command('bench', '--site', SITE, 'install-app', app['name'])
     command('bench', '--site', SITE, 'migrate')
     command('bench', '--site', SITE, 'enable-scheduler')
+    second = 'search-other.local'
+    command('bench', 'new-site', second, '--db-root-password', os.environ['DB_PASSWORD'],
+            '--admin-password', os.environ['ADMIN_PASSWORD'], '--mariadb-user-host-login-scope', '%')
+    second_config = Path('sites')/second/'site_config.json'
+    second_values = json.loads(second_config.read_text())
+    second_values.update(helpdesk_search_backend='redis', encryption_key=Fernet.generate_key().decode())
+    second_config.write_text(json.dumps(second_values))
+    for app in LOCK['apps']:
+        if app['name'] != 'frappe':
+            command('bench', '--site', second, 'install-app', app['name'])
+    command('bench', '--site', second, 'migrate')
+    target = Path('sites/.linked-sites')
+    target.mkdir()
+    (Path('sites')/SITE).rename(target/SITE)
+    (Path('sites')/SITE).symlink_to(Path('.linked-sites')/SITE, target_is_directory=True)
     other = Path('sites/cache-other.local')
     (other/'public/files').mkdir(parents=True, exist_ok=True)
     (other/'site_config.json').write_text('{"redis_cache":"redis://redis:6379/3"}')
@@ -186,6 +203,12 @@ def verify():
     verify_pdf(session, base)
     from cache_test import verify_cache
     verify_cache()
+    frappe.db.commit()
+    assert frappe.conf.allow_tests, 'Application tests must be explicitly enabled on the disposable site'
+    command('bench', '--site', SITE, 'run-tests', '--app', 'helpdesk',
+            '--module', 'helpdesk.tests.test_ticket_search_backend')
+    from community_test import verify_community
+    verify_community(session, base)
     jobs = [frappe.enqueue('frappe.utils.now', queue=q, job_name=f'container-smoke-{q}')
             for q in ('short', 'default', 'long')]
     deadline = time.monotonic() + 120

@@ -9,6 +9,25 @@ from http_cache_config import configure, redis_connection
 
 
 class CacheConfigTests(unittest.TestCase):
+    @unittest.skipIf(sys.platform == 'win32', 'Real symlink acceptance runs on Linux')
+    def test_symlink_site_requires_opt_in_and_env_wins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            (root/'image-lock.json').write_text('{}')
+            (root/'sites/regular.local').mkdir(parents=True)
+            (root/'sites/regular.local/site_config.json').write_text('{}')
+            (root/'target').mkdir()
+            (root/'target/site_config.json').write_text('{}')
+            (root/'sites/linked.local').symlink_to(root/'target',target_is_directory=True)
+            (root/'sites/broken.local').symlink_to(root/'missing',target_is_directory=True)
+            common=root/'sites/common_site_config.json'
+            env={'HTTP_REDIS_CACHE_ACTIVE':'true','HTTP_REDIS_CACHE_URL':'redis://redis/0'}
+            common.write_text('{}')
+            self.assertEqual(set(configure(root,env)['sites']),{'regular.local'})
+            common.write_text('{"allow_symlink_sites":true}')
+            self.assertEqual(set(configure(root,env)['sites']),{'regular.local','linked.local'})
+            self.assertEqual(set(configure(root,dict(env,FRAPPE_ALLOW_SYMLINK_SITES='false'))['sites']),{'regular.local'})
+
     def test_disabled_needs_no_site_or_credentials(self):
         self.assertEqual(configure(Path('/missing'), {}), {'active': False, 'sites': {}})
 

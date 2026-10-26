@@ -7,6 +7,7 @@ import subprocess
 import sys
 from security import overlay, prune_build_tools, verify_overrides
 from pdf_overlay import apply_pdf
+from community_overlay import apply_community
 
 
 def run(*args, cwd=None):
@@ -36,7 +37,8 @@ def install():
         actual = subprocess.check_output(['git', '-C', str(dest), 'rev-parse', 'HEAD'], text=True).strip()
         if actual != sha:
             raise ValueError('Source commit mismatch')
-        lock['source_overlays'][name] = overlay(dest, lock['security_overrides'])
+        lock['source_overlays'][name] = apply_community(dest, app, lock['community_patches'])
+        lock['source_overlays'][name] += overlay(dest, lock['security_overrides'])
         lock['source_overlays'][name] += apply_pdf(dest, Path('/opt/build/pdf'))
         run('git', '-C', str(dest), 'add', '.')
         run('git', '-C', str(dest), '-c', 'user.name=Container security overlay',

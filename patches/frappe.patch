@@ -1,0 +1,37 @@
+--- a/frappe/config.py
++++ b/frappe/config.py
+@@ -121,6 +121,11 @@
+ 
+ 
+ def _apply_common_env_overrides(config: _dict[str, Any]) -> None:
++	from frappe.utils.data import cint, sbool
++
++	config["allow_symlink_sites"] = cint(
++		sbool(os.environ.get("FRAPPE_ALLOW_SYMLINK_SITES", config.get("allow_symlink_sites", False)))
++	)
+ 	config["redis_queue"] = (
+ 		os.environ.get("FRAPPE_REDIS_QUEUE") or config.get("redis_queue") or "redis://127.0.0.1:11311"
+ 	)
+--- a/frappe/utils/__init__.py
++++ b/frappe/utils/__init__.py
+@@ -695,16 +695,19 @@
+ 
+ 
+ def get_sites(sites_path=None):
++	from frappe.config import get_common_site_config
++
+ 	if not sites_path:
+ 		sites_path = getattr(frappe.local, "sites_path", None) or "."
+ 
++	allow_symlinks = get_common_site_config(sites_path).allow_symlink_sites
+ 	sites = []
+ 	for site in os.listdir(sites_path):
+ 		path = os.path.join(sites_path, site)
+ 
+ 		if (
+ 			os.path.isdir(path)
+-			and not os.path.islink(path)
++			and (allow_symlinks or not os.path.islink(path))
+ 			and os.path.exists(os.path.join(path, "site_config.json"))
+ 		):
+ 			# is a dir and has site_config.json
