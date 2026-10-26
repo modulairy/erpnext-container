@@ -46,6 +46,7 @@ def setup():
 
 def verify():
     command('node', '/tests/zod_test.cjs')
+    command('python', '/tests/os_test.py')
     for source in LOCK['os_backport_provenance'].values():
         for name in source['binaries']:
             actual = subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', name], text=True)
