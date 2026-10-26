@@ -110,6 +110,7 @@ services:
       - ${PDF_OUTPUT_DIR:-../.build/pdf}:/pdf-results
       - ./cache_test.py:/tests/cache_test.py:ro
       - ./zod_test.cjs:/tests/zod_test.cjs:ro
+      - ./os_test.py:/tests/os_test.py:ro
 
 volumes:
   sites:
