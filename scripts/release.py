@@ -35,7 +35,7 @@ def publish(lock, digest, repository, revision, run_id, run_number):
     base = f'repos/{repository}'
     # Keep existing source tags immutable when rebuilding the same ERPNext release.
     existing = api('GET', base+'/git/ref/tags/'+tag)
-    release_tag = tag if not existing or existing['object']['sha'] == revision else f'{tag}-build.{run_number}'
+    release_tag = tag if not existing or existing['object']['sha'] == revision else f'{tag}-{revision[:7]}'
     ref = existing if release_tag == tag else api('GET', base+'/git/ref/tags/'+release_tag)
     if ref and (ref['object']['type'] != 'commit' or ref['object']['sha'] != revision):
         raise ValueError('Release tag already identifies another source; refusing to move it')

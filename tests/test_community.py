@@ -56,7 +56,12 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue(publish(*args).endswith('/v16.52.1'))
             self.assertEqual(sum(m=='POST' and p.endswith('/git/refs') for m,p,_ in calls),1)
             changed=(*args[:3],'c'*40,'124','25')
-            self.assertTrue(publish(*changed).endswith('/v16.52.1-build.25'))
+            self.assertTrue(publish(*changed).endswith('/v16.52.1-ccccccc'))
+            rerun=(*changed[:4],'125','26')
+            self.assertTrue(publish(*rerun).endswith('/v16.52.1-ccccccc'))
+            collision=(*args[:3],'c'*7+'d'*33,'126','27')
+            with self.assertRaisesRegex(ValueError, 'refusing to move'):
+                publish(*collision)
         self.assertEqual(state['repos/modulairy/erpnext-container/git/ref/tags/v16.52.1']['object']['sha'],'b'*40)
 
     def test_invalid_publication_identifiers_never_write(self):
