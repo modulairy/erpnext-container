@@ -131,7 +131,7 @@ def get_pdf(print_format, html, options, output, pdf_generator=None):
     if marker not in text:
         raise ValueError('Review upstream Chromium orientation handling')
     text = text.replace(marker, '''\t\t# Explicit @page dimensions take precedence over CDP's landscape flag.
-\t\tif updated_options["landscape"]:
+\t\tif updated_options.get("landscape", False):
 \t\t\tif options["page-width"] < options["page-height"]:
 \t\t\t\toptions["page-width"], options["page-height"] = options["page-height"], options["page-width"]
 \t\t\tupdated_options["landscape"] = False
