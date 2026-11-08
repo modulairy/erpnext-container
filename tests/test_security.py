@@ -129,3 +129,23 @@ class SecurityTests(unittest.TestCase):
             changes = overlay(root, {'python': {}, 'javascript': {'postcss': '8.5.31'}})
             self.assertEqual(changes, [])
             self.assertNotIn('resolutions', json.loads((root/'package.json').read_text()))
+
+    def test_overlay_skips_placeholder_package_templates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)/'builder'
+            frontend = root/'frontend'
+            template = frontend/'plugin-sdk/templates/create/package.json'
+            template.parent.mkdir(parents=True)
+            template_text = '{\\n\\t"name": __PACKAGE_NAME_JSON__,\\n}\\n'
+            template.write_text(template_text)
+            (frontend/'package.json').write_text(
+                '{"devDependencies":{"postcss":"^8.5.1"}}')
+            (root/'pyproject.toml').write_text('[project]\\ndependencies = []\\n')
+
+            changes = overlay(root, {'python': {}, 'javascript': {'postcss': '8.5.18'}})
+
+            self.assertEqual(template.read_text(), template_text)
+            self.assertEqual(
+                json.loads((frontend/'package.json').read_text())['devDependencies']['postcss'],
+                '8.5.18')
+            self.assertEqual(len(changes), 1)
