@@ -10,7 +10,7 @@ Each run enumerates official stable GitHub releases and resolves declared app de
 
 Telephony (`develop`), Payments (`version-16`) and Webshop (`version-16`) currently have no published releases. They use explicit, immutable commit snapshots and are identified as such in `image-lock.json`. Payments/Webshop `develop` require Frappe 17 and cannot be used with stable v16. Missing metadata, undeclared app dependencies or an incompatible complete set stops the run. Metadata compatibility is only a candidate check: installation and runtime tests must also pass.
 
-The GHCR tag is the selected ERPNext release, for example `v16.52.1`. Rebuilding that ERPNext release can update the same tag when another app, snapshot or security package changes. Use the reported image digest for immutable deployments. No `latest` tag is published. The complete source/runtime selection is in `/home/frappe/frappe-bench/image-lock.json` and the Actions reports.
+The GHCR tag is the selected ERPNext release, for example `v16.54.0`. Rebuilding that ERPNext release can update the same tag when another app, snapshot or security package changes. Use the reported image digest for immutable deployments. No `latest` tag is published. The complete source/runtime selection is in `/home/frappe/frappe-bench/image-lock.json` and the Actions reports.
 
 ## Manual build and publication
 
@@ -40,7 +40,7 @@ After a successful push and provenance/SBOM attestations, the publish job create
 
 ## Reviewed Frappe 16 backports
 
-`patches/manifest.json` records the source revisions, input/output file hashes and patch checksums for the opt-in [Frappe symlink discovery change](https://github.com/frappe/frappe/pull/44199) and [Helpdesk Redis ticket search](https://github.com/frappe/helpdesk/pull/3914). These are container backports, not upstream-merged features. They are reviewed for Frappe 16.53.0 and Helpdesk 1.31.0. Resolution/build fails on an unreviewed version or changed source instead of omitting a patch. Applied provenance is recorded in `image-lock.json`.
+`patches/manifest.json` records the source revisions, input/output file hashes and patch checksums for the opt-in [Frappe symlink discovery change](https://github.com/frappe/frappe/pull/44199) and [Helpdesk Redis ticket search](https://github.com/frappe/helpdesk/pull/3914). These are container backports, not upstream-merged features. They are reviewed for Frappe 16.55.2 and Helpdesk 16.1.0. Resolution/build fails on an unreviewed version or changed source instead of omitting a patch. Applied provenance is recorded in `image-lock.json`.
 
 Symlink site discovery is disabled by default. Set `allow_symlink_sites: true` in `common_site_config.json` or set `FRAPPE_ALLOW_SYMLINK_SITES=true`; ENV wins, including explicit false. Only configured directory targets are included. Backend, scheduler, workers and frontend must share the same readable target paths. Manage site directories and links as trusted operator configuration; aliases of one database are not separate tenants. HTTP cache discovery honors the same opt-in setting; restart frontend after configuration or link changes.
 

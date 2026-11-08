@@ -1,8 +1,8 @@
 {
   "frappe": {
-    "version": "16.53.0",
+    "version": "16.55.2",
     "upstream_pr": "https://github.com/frappe/frappe/pull/44199",
-    "upstream_revision": "636d392be7051d5e855008ccf541db09b109aa63",
+    "upstream_revision": "3d1284c5fdb52207a516a49bbf2fd186cb43b3ab",
     "patch": "frappe.patch",
     "sha256": "1081ebd0d83fa41e2cc7d428745871c665247efe793c269348f2b14debf23d3e",
     "expected": {
@@ -15,9 +15,9 @@
     }
   },
   "helpdesk": {
-    "version": "1.31.0",
+    "version": "16.1.0",
     "upstream_pr": "https://github.com/frappe/helpdesk/pull/3914",
-    "upstream_revision": "e93c6b0a1336917b0009f960f969e2be35b6d478",
+    "upstream_revision": "e326986329341c803dd4bf094322670ad0591ca5",
     "patch": "helpdesk.patch",
     "sha256": "59390e24ecd64e54e8d9ed72a61666a779ea9e874414a098b559fa8a9a0fd151",
     "expected": {
