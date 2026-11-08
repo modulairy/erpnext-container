@@ -136,11 +136,11 @@ class SecurityTests(unittest.TestCase):
             frontend = root/'frontend'
             template = frontend/'plugin-sdk/templates/create/package.json'
             template.parent.mkdir(parents=True)
-            template_text = '{\\n\\t"name": __PACKAGE_NAME_JSON__,\\n}\\n'
+            template_text = '{\n\t"name": __PACKAGE_NAME_JSON__,\n}\n'
             template.write_text(template_text)
             (frontend/'package.json').write_text(
                 '{"devDependencies":{"postcss":"^8.5.1"}}')
-            (root/'pyproject.toml').write_text('[project]\\ndependencies = []\\n')
+            (root/'pyproject.toml').write_text('[project]\ndependencies = []\n')
 
             changes = overlay(root, {'python': {}, 'javascript': {'postcss': '8.5.18'}})
 
