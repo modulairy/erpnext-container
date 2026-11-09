@@ -470,7 +470,9 @@ def scan_with_cache(cache):
         sbom['components'].append(chrome_component)
     sbom.setdefault('metadata', {}).setdefault('properties', []).append(
         {'name': 'container:verified-source-fixes', 'value': json.dumps(source_proofs, sort_keys=True)})
-    (OUT/'sbom.cdx.json').write_text(json.dumps(sbom, indent=2)+'\n')
+    verified_sbom = OUT/'sbom.verified.cdx.json'
+    verified_sbom.write_text(json.dumps(sbom, indent=2)+'\n')
+    verified_sbom.replace(OUT/'sbom.cdx.json')
     (OUT/'gate-security.json').write_text(json.dumps(assessments, indent=2)+'\n')
     for filename, assessment in assessments.items():
         summary = (f"{filename}: {len(assessment.get('accepted', []))} accepted, "
