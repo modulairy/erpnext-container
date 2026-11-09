@@ -1,6 +1,7 @@
 """The same build, test and scan commands are used locally and in Actions."""
 import json
 import hashlib
+import fnmatch
 import re
 import shutil
 import os
@@ -171,6 +172,31 @@ def build():
     run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
 
 
+def assess_integrity(output, policy):
+    rules = []
+    for line in policy.splitlines():
+        match = re.fullmatch(r'path-(exclude|include)(?:\s+|=)(\S+)', line.strip())
+        if match:
+            rules.append(match.groups())
+    omitted, blocking = [], []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        match = re.fullmatch(r'missing\s+(/\S+)', line)
+        path = match[1] if match else ''
+        excluded = False
+        for operation, pattern in rules:
+            if fnmatch.fnmatchcase(path, pattern):
+                excluded = operation == 'exclude'
+        documentation = path.startswith(('/usr/share/doc/', '/usr/share/man/', '/usr/share/lintian/overrides/'))
+        if match and documentation and excluded:
+            omitted.append(path)
+        else:
+            blocking.append(line)
+    return {'intentional_omissions': omitted, 'blocking': blocking,
+            'policy_sha256': hashlib.sha256(policy.encode()).hexdigest(), 'raw_output': output}
+
+
 def capture_installed(image, inventory, lock):
     query = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'dpkg-query', image,
                                      '-W', '-f=${Package}\\t${Version}\\n'], text=True)
@@ -179,8 +205,13 @@ def capture_installed(image, inventory, lock):
                        for name in proof['binaries']})
     integrity = subprocess.run(['docker', 'run', '--rm', '--entrypoint', 'dpkg', image,
                                 '--verify', *packages], capture_output=True, text=True)
-    if integrity.returncode or integrity.stdout.strip():
-        raise ValueError('Installed backport package integrity check failed: '+integrity.stdout)
+    slim_policy = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'cat', image,
+                                           '/etc/dpkg/dpkg.cfg.d/docker'], text=True)
+    checked = assess_integrity(integrity.stdout, slim_policy)
+    checked.update(exit_code=integrity.returncode, stderr=integrity.stderr, policy=slim_policy)
+    (OUT/'package-integrity.json').write_text(json.dumps(checked, indent=2)+'\n')
+    if integrity.returncode or integrity.stderr.strip() or checked['blocking']:
+        raise ValueError('Installed backport package integrity check failed: '+json.dumps(checked['blocking']))
     xml_check = ("import hashlib,json,pyexpat; from pathlib import Path; "
                  "import _elementtree; "
                  "print(json.dumps({'version':pyexpat.EXPAT_VERSION,'binaries':{"

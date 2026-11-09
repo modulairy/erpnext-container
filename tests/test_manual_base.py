@@ -95,3 +95,16 @@ class ManualBaseTests(unittest.TestCase):
                 pipeline.prepare_base()
                 self.assertEqual(json.loads((root/'out/base-images.json').read_text()), data)
                 self.assertEqual(json.loads((root/'out/lock.json').read_text())['python'], '3.14.10')
+
+    def test_integrity_only_allows_configured_missing_documentation(self):
+        policy = 'path-exclude /usr/share/doc/*\npath-exclude /usr/share/man/*\npath-include /usr/share/doc/*/copyright\n'
+        checked = pipeline.assess_integrity('missing     /usr/share/doc/lib/AUTHORS\n', policy)
+        self.assertEqual(checked['intentional_omissions'], ['/usr/share/doc/lib/AUTHORS'])
+        self.assertEqual(checked['blocking'], [])
+        for output, rules in (
+            ('missing     /usr/share/doc/lib/AUTHORS\n', ''),
+            ('missing     /usr/lib/libexpat.so\n', 'path-exclude /usr/lib/*'),
+            ('??5??????   /usr/share/doc/lib/AUTHORS\n', policy),
+            ('missing     /usr/share/doc/lib/copyright\n', policy),
+        ):
+            self.assertTrue(pipeline.assess_integrity(output, rules)['blocking'])

@@ -71,6 +71,7 @@ jobs:
             .build/image-lock.json
             .build/base-images.json
             .build/installed-packages.json
+            .build/package-integrity.json
             .build/source-fixes.json
             .build/chromium*.json
             .build/*.log
