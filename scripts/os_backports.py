@@ -63,6 +63,13 @@ def prepare_source(name, source, work, resolved_at):
             raise ValueError('SQLite packaging changed; review required')
         control.write_text(control.read_text().replace('tcl9.1-dev', 'tcl9.0-dev'))
         rules.write_text(rules.read_text().replace('TCLV_SECONDARY = 9.1', 'TCLV_SECONDARY = 9.0'))
+        # Debian raises the supported default page limit to 32 KiB.
+        # Retain that contract and test the resulting 16 KiB sector selection.
+        io_test = root/'test/io.test'
+        expected = '{}                   16384      8192'
+        if io_test.read_text().count(expected) != 1 or '# define SQLITE_MAX_DEFAULT_PAGE_SIZE 32768' not in (root/'src/sqliteLimit.h').read_text():
+            raise ValueError('SQLite page-size packaging changed; review required')
+        io_test.write_text(io_test.read_text().replace(expected, '{}                   16384     16384'))
     if patch := source.get('patch'):
         target = root/'debian/patches/container-CVE-2026-37555.patch'
         download(patch, target)
@@ -126,7 +133,7 @@ def main():
         env = dict(os.environ, PATH='/usr/sbin:/usr/bin:/sbin:/bin')
         run('runuser', '-u', 'package-builder', '--', 'dpkg-buildpackage', '-b', '-us', '-uc', '-j2', cwd=root, env=env)
         if name == 'sqlite3':
-            run('runuser', '-u', 'package-builder', '--', 'make', '-C', str(root/'debian/8.6'), 'quicktest', cwd=root, env=env)
+            run('runuser', '-u', 'package-builder', '--', '/usr/bin/tclsh8.6', str(root/'test/testrunner.tcl'), 'mdevtest', '--jobs', '2', cwd=root/'debian/8.6', env=env)
         installed = {}
         build_installed = {}
         for deb in work.glob('*.deb'):
