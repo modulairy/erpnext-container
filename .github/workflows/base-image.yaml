@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rebuild:
-        description: Build/rebuild the base (disabled: verify selected ready images only)
+        description: 'Build/rebuild the base (disabled: verify selected ready images only)'
         type: boolean
         default: false
         required: true
