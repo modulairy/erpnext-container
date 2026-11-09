@@ -21,11 +21,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  base:
+    uses: ./.github/workflows/base-image.yaml
+    permissions:
+      contents: read
+      packages: write
+
   verify:
+    needs: base
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,13 +45,18 @@ jobs:
         run: |
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
-          bash -n resources/start.sh resources/nginx-entrypoint.sh
-      - name: Resolve compatible public releases
+          bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
+      - name: Download matching resolved inputs and base digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: resolved-inputs
+          path: .build
+          digest-mismatch: error
+      - name: Authenticate base image pulls
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p .build
-          python scripts/resolve.py 2>&1 | tee .build/resolve.log
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Build immutable inputs
         id: build
         run: python scripts/pipeline.py build
@@ -62,6 +75,7 @@ jobs:
           path: |
             .build/lock.json
             .build/image-lock.json
+            .build/base-images.json
             .build/*.log
             .build/*security.json
             .build/vulnerabilities.json
@@ -88,6 +102,9 @@ jobs:
         run: |
           echo 'Publishing requires a manual run on main.' >&2
           exit 1
+      - name: Logout after base image pulls
+        if: ${{ always() }}
+        run: docker logout ghcr.io
 
   publish:
     needs: verify

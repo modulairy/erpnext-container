@@ -1,5 +1,8 @@
 """The same build, test and scan commands are used locally and in Actions."""
 import json
+import hashlib
+import re
+import shutil
 import os
 from pathlib import Path
 import secrets
@@ -20,12 +23,108 @@ def load():
     return json.loads((OUT/'lock.json').read_text())
 
 
+
+BASE_IMAGE = 'ghcr.io/modulairy/erpnext-base'
+BASE_FIELDS = ('python', 'node', 'python_image', 'node_image', 'yarn',
+               'mariadb_client', 'curl_backport', 'os_backports')
+
+
+def base_key(lock):
+    # App releases, Bench and resolved_at must never invalidate OS compilation.
+    inputs = {'platform': 'linux/amd64', 'lock': {k: lock[k] for k in BASE_FIELDS},
+              'files': {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
+                        for name in ('Containerfile.base', 'scripts/os_backports.py')}}
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def registry_digest(tag):
+    result = subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', tag,
+                             '--format', '{{json .Manifest.Digest}}'],
+                            capture_output=True, text=True)
+    if result.returncode:
+        if any(message in result.stderr.lower() for message in
+               ('not found', 'manifest unknown', 'name unknown')):
+            return None
+        raise RuntimeError('Cannot inspect base image: '+result.stderr.strip())
+    digest = json.loads(result.stdout)
+    if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+        raise ValueError('Invalid base image digest')
+    return digest
+
+
+def base():
+    lock = load()
+    key = base_key(lock)
+    context = OUT/'base'
+    context.mkdir(parents=True, exist_ok=True)
+    (context/'lock.json').write_text(json.dumps({**{k: lock[k] for k in BASE_FIELDS}, 'resolved_at': lock['resolved_at']}, indent=2)+'\n')
+    shutil.copyfile(OUT/'mariadb-keyring.asc', context/'mariadb-keyring.asc')
+    images, rebuilt = {}, []
+    force = '--rebuild' in sys.argv[2:]
+    # Build builder first so the runtime target reuses the expensive shared layers.
+    for kind in ('builder', 'runtime'):
+        tag = f'{BASE_IMAGE}:{kind}-{key}'
+        digest = None if force else registry_digest(tag)
+        if digest is None:
+            args = ['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push',
+                    '--build-context', f'resolved={context}', '--file', 'Containerfile.base',
+                    '--target', kind+'-base', '--tag', tag,
+                    '--label', 'io.modulairy.erpnext.base-key='+key,
+                    '--metadata-file', str(context/(kind+'-metadata.json'))]
+            if force and kind == 'builder':
+                args += ['--no-cache']
+            for name, value in (('PYTHON_IMAGE', lock['python_image']),
+                                ('NODE_IMAGE', lock['node_image']), ('YARN_VERSION', lock['yarn'])):
+                args += ['--build-arg', name+'='+value]
+            run(args+['.'])
+            digest = registry_digest(tag)
+            if digest is None:
+                raise RuntimeError('Published base manifest is missing')
+            rebuilt.append(kind)
+        images[kind] = BASE_IMAGE+'@'+digest
+        # These images stop before Bench, and compilers belong only to the builder.
+        check = ("import importlib.util,shutil; from pathlib import Path; "
+                 "assert importlib.util.find_spec('bench') is None; "
+                 "assert Path('/opt/os-backports/provenance.json').is_file(); "
+                 "assert shutil.which('node'); assert shutil.which('chromium-headless-shell'); ")
+        check += ("assert all(shutil.which(x) for x in ('gcc','npm','yarn'))"
+                  if kind == 'builder' else
+                  "assert not any(shutil.which(x) for x in ('gcc','npm','yarn'))")
+        run(['docker', 'run', '--rm', '--entrypoint', 'python', images[kind], '-c', check])
+    data = {'schema': 1, 'key': key, 'images': images, 'rebuilt': rebuilt}
+    (OUT/'base-images.json').write_text(json.dumps(data, indent=2)+'\n')
+    summary = f"Base images: {key}; rebuilt: {', '.join(rebuilt) or 'none (GHCR reuse)'}.\n"
+    summary += '\n'.join(f'{kind}: {ref}' for kind, ref in images.items())+'\n'
+    print(summary)
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as handle:
+            handle.write(summary)
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+            for kind, ref in images.items():
+                handle.write(f'{kind}={ref}\n')
+
+
+def locked_base_images(lock):
+    metadata = json.loads((OUT/'base-images.json').read_text())
+    if metadata.get('schema') != 1 or metadata.get('key') != base_key(lock):
+        raise ValueError('Base image inputs changed; run the base image workflow')
+    images = metadata['images']
+    for kind in ('runtime', 'builder'):
+        if not re.fullmatch(re.escape(BASE_IMAGE)+r'@sha256:[0-9a-f]{64}', images[kind]):
+            raise ValueError('Base image must use the approved GHCR package and a digest')
+    return images
+
+
 def build():
     lock = load()
+    bases = locked_base_images(lock)
+    lock['base_images'] = bases
+    (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     args = ['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--load',
             '--build-context', f'resolved={OUT}', '--file', 'Containerfile', '--tag', IMAGE]
-    values = {'PYTHON_IMAGE': lock['python_image'], 'NODE_IMAGE': lock['node_image'],
-              'BENCH_VERSION': lock['bench'], 'YARN_VERSION': lock['yarn'],
+    values = {'RUNTIME_BASE_IMAGE': bases['runtime'], 'BUILDER_BASE_IMAGE': bases['builder'],
+              'BENCH_VERSION': lock['bench'],
               'ERPNEXT_TAG': lock['erpnext_tag'],
               'SOURCE_REVISION': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
     for key, value in values.items():
@@ -183,4 +282,4 @@ def scan_with_cache(cache):
 
 if __name__ == '__main__':
     os.chdir(ROOT)
-    {'build': build, 'integration': integration, 'scan': scan}[sys.argv[1]]()
+    {'base': base, 'build': build, 'integration': integration, 'scan': scan}[sys.argv[1]]()

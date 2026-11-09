@@ -1,6 +1,8 @@
 *
 !Containerfile
+!Containerfile.base
 !scripts/
+!scripts/os_backports.py
 !scripts/build.py
 !scripts/security.py
 !scripts/pdf_overlay.py

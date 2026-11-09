@@ -1,0 +1,67 @@
+name: ERPNext base images
+
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: Rebuild base packages even when matching GHCR images exist
+        type: boolean
+        default: false
+        required: true
+  workflow_call:
+    inputs:
+      rebuild:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: erpnext-base-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  base:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Validate base image changes
+        run: |
+          python -m pip install -r requirements-ci.txt
+          python -m unittest discover -s tests -v
+          bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
+      - name: Build or reuse GHCR base images
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+          BASE_REBUILD: ${{ inputs.rebuild }}
+        run: bash scripts/base-image.sh
+      - name: Upload resolved inputs and base digests
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: resolved-inputs
+          include-hidden-files: true
+          path: |
+            .build/lock.json
+            .build/mariadb-keyring.asc
+            .build/redis.lua
+            .build/base-images.json
+            .build/base/
+            .build/resolve.log
+          retention-days: 14

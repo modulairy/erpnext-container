@@ -1,6 +1,6 @@
 # Community ERPNext container
 
-Builds `ghcr.io/modulairy/erpnext:<ERPNext-release-tag>` from public upstream sources. GitHub Actions runs **only manually**. No push, PR, release or scheduled triggers are configured.
+Builds `ghcr.io/modulairy/erpnext:<ERPNext-release-tag>` from public upstream sources. GitHub Actions starts **only manually**. The application workflow calls the reusable base-image workflow; no push, PR, release or scheduled triggers are configured.
 
 ## Applications and versions
 
@@ -34,9 +34,20 @@ Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard reject
 
 The same stage packages upstream libX11 1.8.14, libXrender 0.9.13 and libXtst 1.2.6 with their locked Debian packaging and applies the reviewed libsndfile CVE-2026-37555 patch. Upstream archives and the patch have pinned SHA256 values; custom package versions use `+container1`. Strict symbol checks stay enabled. Integration tests load the X libraries and exercise libsndfile's real WAV IMA-ADPCM overflow path with a sparse metadata fixture, alongside the Chromium PDF tests.
 
-The build job has no package write permission. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
+The application build job has only package read permission. A separate base-image job has package write permission for the shared dependency images. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
 
 After a successful push and provenance/SBOM attestations, the publish job creates a Git tag and GitHub Release containing the image digest, source revision, locked applications and Actions evidence. The first release uses the ERPNext tag; rebuilding that ERPNext version from a different source revision uses `<ERPNext-tag>-<7-character-commit-SHA>`. Existing source tags are never moved. The GHCR tag remains the ERPNext tag. Only the publish job has the repository write permission needed for tags/releases. Logout runs last, including on failure.
+
+
+## Shared base images
+
+`Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Both stop before Bench installation. Runtime contains Python, Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder adds npm/Yarn, compilers and development libraries; these tools do not enter the final application image.
+
+**Actions > ERPNext base images > Run workflow** on `main` builds missing images. The application workflow performs the same preparation automatically, then installs Bench and the applications on these bases. The input hash covers the base Containerfile, OS backport script and selected Python/Node/Yarn/OS package inputs. App releases, Bench, application patches and resolution timestamps do not cause OS recompilation. Matching images are reused from GHCR and their exact digests are written to `base-images.json` and the final image lock.
+
+Select `rebuild` in the base workflow to refresh OS repository packages even when the input hash is unchanged. This refreshes the matching base tags; every application run still locks the resulting digests. Without an input change or explicit rebuild, apt repositories are not queried again. The first base build retains the existing source-compilation cost; subsequent application builds skip it.
+
+Base publication validates the dependency/tool boundary; it is not a successful application security assessment. The existing full application integration and security gates still determine whether an ERPNext image can be published. Base registry permissions or network failures stop preparation rather than triggering a hidden full rebuild.
 
 ## Reviewed Frappe 16 backports
 
@@ -95,6 +106,7 @@ Requires Python 3.14, Docker with Buildx/Compose, network access and sufficient 
 python -m pip install -r requirements-ci.txt
 python -m unittest discover -s tests -v
 python scripts/resolve.py
+bash scripts/base-image.sh # GHCR_USER and GHCR_TOKEN must be set
 python scripts/pipeline.py build
 python scripts/pipeline.py integration
 python scripts/pipeline.py scan
