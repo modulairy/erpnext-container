@@ -62,7 +62,6 @@ def setup():
 
 
 def verify():
-    command('node', '/tests/zod_test.cjs')
     command('python', '/tests/os_test.py')
     for source in LOCK['os_backport_provenance'].values():
         for name in source['build_only_binaries']:
@@ -169,7 +168,7 @@ def verify():
     assert not Path('/usr/local/bin/npm').exists()
     assert not Path('/usr/local/bin/yarn').exists()
     assert not list(Path('apps').glob('*/node_modules/esbuild*/bin/esbuild'))
-    print('PASS: security override image codecs, PDF reader, file locking, GitPython and compiler removal', flush=True)
+    print('PASS: upstream image codecs, PDF reader, file locking, GitPython and compiler removal', flush=True)
     print('PASS: assets and PDF', flush=True)
     os.chdir('sites')
     frappe.init(site=SITE, sites_path=os.getcwd())

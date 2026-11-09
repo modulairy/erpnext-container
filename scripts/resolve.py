@@ -172,27 +172,6 @@ def pypi_latest(name, python, constraint=''):
     raise ValueError(f'No compatible {name}')
 
 
-def security_versions(python):
-    policy = json.loads((Path(__file__).resolve().parents[1]/'security-policy.json').read_text())
-    selected = {'python': {}, 'javascript': {}, 'javascript_by_app': {},
-                'javascript_migrations': policy.get('javascript_migrations', {})}
-    for name, constraint in policy['python'].items():
-        selected['python'][name] = pypi_latest(name, python, constraint)
-    groups = [(selected['javascript'], policy['javascript'])]
-    for app, constraints in policy.get('javascript_by_app', {}).items():
-        if app not in APPS:
-            raise ValueError(f'Unknown app security policy: {app}')
-        selected['javascript_by_app'][app] = {}
-        groups.append((selected['javascript_by_app'][app], constraints))
-    for target, constraints in groups:
-        for name, constraint in constraints.items():
-            data = json.loads(request('https://registry.npmjs.org/'+quote(name, safe='')))
-            versions = [v for v in data['versions'] if STABLE.fullmatch(v)
-                        and NpmSpec(constraint).match(NodeVersion(v))]
-            target[name] = max(versions, key=Version)
-    return selected
-
-
 def image_digest(tag):
     text = subprocess.check_output(['docker', 'buildx', 'imagetools', 'inspect', tag], text=True)
     match = re.search(r'^Digest:\s+(sha256:[a-f0-9]{64})$', text, re.M)
@@ -320,7 +299,6 @@ def os_backports():
     return result
 
 
-
 def pyexpat_sources(python):
     files = {'pyexpat.c': 'Modules/pyexpat.c', '_elementtree.c': 'Modules/_elementtree.c',
              'clinic/_elementtree.c.h': 'Modules/clinic/_elementtree.c.h',
@@ -402,7 +380,6 @@ def main():
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'apps': rows, **inputs, 'bench': bench,
             'bootstrap': inputs['bootstrap'],
-            'security_overrides': security_versions(python),
             'mariadb_image': image_digest('mariadb:11.8'),
             'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': trivy_image, 'grype_image': grype_image,

@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import sys
 from apps import APPS
-from security import overlay, prune_build_tools, verify_overrides
 from pdf_overlay import apply_pdf
 from community_overlay import apply_community
 
@@ -39,22 +38,18 @@ def install():
         if actual != sha:
             raise ValueError('Source commit mismatch')
         lock['source_overlays'][name] = apply_community(dest, app, lock['community_patches'])
-        lock['source_overlays'][name] += overlay(dest, lock['security_overrides'])
         lock['source_overlays'][name] += apply_pdf(dest, Path('/opt/build/pdf'))
         run('git', '-C', str(dest), 'add', '.')
-        run('git', '-C', str(dest), '-c', 'user.name=Container security overlay',
+        run('git', '-C', str(dest), '-c', 'user.name=Container feature patches',
             '-c', 'user.email=container@example.invalid', 'commit', '--allow-empty',
-            '-m', 'Apply declared container security dependency overrides')
+            '-m', 'Apply reviewed container feature patches')
     run('bench', 'init', '--frappe-path', f'file://{sources}/frappe', '--frappe-branch', 'locked',
         '--no-procfile', '--no-backups', '--skip-redis-config-generation', '--skip-assets', str(bench))
     for app in lock['apps']:
         if app['name'] != 'frappe':
             run('bench', 'get-app', '--branch', 'locked', '--skip-assets',
                 f"file://{sources}/{app['name']}", cwd=bench)
-    run(str(bench/'env/bin/python'), '-m', 'pip', 'install', '--upgrade',
-        *[f'{name}=={version}' for name, version in lock['security_overrides']['python'].items()])
     run(str(bench/'env/bin/python'), '-m', 'pip', 'check')
-    verify_overrides(bench, lock['security_overrides'])
     (bench/'image-lock.json').write_text(json.dumps(lock, indent=2)+'\n')
 
 
@@ -64,7 +59,6 @@ def assets():
     lock = json.loads((bench/'image-lock.json').read_text())
     allowed = {app['name'] for app in lock['apps']}
     run('bench', 'build', '--production', cwd=bench)
-    verify_overrides(bench, lock['security_overrides'])
     actual = set((bench/'sites/apps.txt').read_text().split())
     if actual != allowed:
         raise ValueError(f'Unexpected installed sources: {actual}')
@@ -79,6 +73,27 @@ def assets():
         if path.is_dir():
             shutil.rmtree(path)
     shutil.rmtree(sources)
+
+
+def prune_build_tools(bench):
+    removed = []
+    # Frappe serves some node_modules files directly. Preserve those trees and
+    # their scanner metadata; remove only known asset compiler packages/binaries.
+    for modules in list(bench.rglob('node_modules')):
+        if modules.is_symlink() or not modules.is_dir():
+            continue
+        paths = [modules/'.bin', modules/'esbuild', modules/'@esbuild']
+        paths += list(modules.glob('esbuild-*'))
+        for path in paths:
+            if path.is_symlink():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
+            else:
+                continue
+            removed.append(str(path.relative_to(bench)))
+    return removed
+
 
 
 if __name__ == '__main__':

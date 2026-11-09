@@ -57,11 +57,6 @@ def get_pdf(print_format, html, options, output, pdf_generator=None):
         write(path, text.replace('import pdfkit', 'from frappe.utils.pdf import get_pdf')
               .replace('pdfkit.from_string(html, False)', 'get_pdf(html)'))
         return changes
-    project = root/'pyproject.toml'
-    text = project.read_text()
-    if '"pdfkit~=1.0.0",' not in text:
-        raise ValueError('Review changed upstream pdfkit dependency')
-    write(project, text.replace('"pdfkit~=1.0.0",', ''))
     pdf = root/'frappe/utils/pdf.py'
     text = pdf.read_text()
     start, end = text.index('import pdfkit\n'), text.index('from packaging.version import Version')

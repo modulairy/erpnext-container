@@ -112,7 +112,6 @@ services:
       - ./pdf_test.py:/tests/pdf_test.py:ro
       - ${PDF_OUTPUT_DIR:-../.build/pdf}:/pdf-results
       - ./cache_test.py:/tests/cache_test.py:ro
-      - ./zod_test.cjs:/tests/zod_test.cjs:ro
       - ./os_test.py:/tests/os_test.py:ro
       - ./community_test.py:/tests/community_test.py:ro
 

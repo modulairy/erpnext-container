@@ -7,7 +7,6 @@
 !scripts/python_expat.py
 !scripts/build.py
 !scripts/apps.py
-!scripts/security.py
 !scripts/pdf_overlay.py
 !scripts/community_overlay.py
 !patches/

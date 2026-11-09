@@ -16,8 +16,6 @@ def verify_sandbox():
     folder = Path('/pdf-results')
     folder.mkdir(exist_ok=True)
     assert shutil.which('wkhtmltopdf') is None, 'Legacy PDF binary remains'
-    import importlib.util
-    assert importlib.util.find_spec('pdfkit') is None, 'Legacy PDF wrapper remains'
     # Verify renderer namespaces and seccomp, not just the absence of a flag.
     generator = ChromePDFGenerator()
     client = CDPSocketClient(generator._devtools_url)
