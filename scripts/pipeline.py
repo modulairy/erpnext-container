@@ -13,10 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get('BUILD_DIR', ROOT/'.build')).resolve()
-PROFILE = os.environ.get('BUILD_PROFILE', 'erpnext')
-if PROFILE not in ('erpnext', 'frappe'):
-    raise ValueError('Unknown build profile')
-IMAGE = PROFILE+'-community:test'
+IMAGE = 'erpnext-community:test'
 
 
 def run(args, **kwargs):
@@ -27,32 +24,7 @@ def load():
     return json.loads((OUT/'lock.json').read_text())
 
 
-
 from base_manifest import BASE_IMAGE, BASE_FIELDS
-
-
-def base_key(lock):
-    # App releases, Bench and resolved_at must never invalidate OS compilation.
-    inputs = {'platform': 'linux/amd64', 'lock': {k: lock[k] for k in BASE_FIELDS},
-              'files': {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
-                        for name in ('Containerfile.base', 'scripts/os_backports.py', 'scripts/chromium.py', 'scripts/python_expat.py', 'scripts/bootstrap.py', 'resources/bootstrap.json')}}
-    return hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-
-
-def registry_digest(tag):
-    result = subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', tag,
-                             '--format', '{{json .Manifest.Digest}}'],
-                            capture_output=True, text=True)
-    if result.returncode:
-        if any(message in result.stderr.lower() for message in
-               ('not found', 'manifest unknown', 'name unknown')):
-            return None
-        raise RuntimeError('Cannot inspect base image: '+result.stderr.strip())
-    digest = json.loads(result.stdout)
-    if not isinstance(digest, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
-        raise ValueError('Invalid base image digest')
-    return digest
-
 
 
 def config():
@@ -76,51 +48,32 @@ def config():
 
 def base():
     lock = load()
-    key = base_key(lock)
     context = OUT/'base'
     context.mkdir(parents=True, exist_ok=True)
-    (context/'lock.json').write_text(json.dumps({**{k: lock[k] for k in BASE_FIELDS}, 'resolved_at': lock['resolved_at']}, indent=2)+'\n')
+    inputs = {name: lock[name] for name in BASE_FIELDS}
+    (context/'lock.json').write_text(json.dumps({**inputs, 'resolved_at': lock['resolved_at']}, indent=2)+'\n')
     shutil.copyfile(OUT/'mariadb-keyring.asc', context/'mariadb-keyring.asc')
-    images, rebuilt = {}, []
-    force = '--rebuild' in sys.argv[2:]
-    # Build builder first so the runtime target reuses the expensive shared layers.
+    images = {}
+    # Always use Docker's layer cache; only this manual command creates bases.
     for kind in ('builder', 'runtime'):
-        tag = f'{BASE_IMAGE}:{kind}-{key}'
-        digest = None if force else registry_digest(tag)
-        if digest is None:
-            args = ['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push',
-                    '--build-context', f'resolved={context}', '--file', 'Containerfile.base',
-                    '--target', kind+'-base', '--tag', tag,
-                    '--label', 'io.modulairy.erpnext.base-key='+key,
-                    '--metadata-file', str(context/(kind+'-metadata.json'))]
-            if force and kind == 'builder':
-                args += ['--no-cache']
-            for name, value in (('PYTHON_IMAGE', lock['python_image']),
-                                ('NODE_IMAGE', lock['node_image']), ('YARN_VERSION', lock['yarn'])):
-                args += ['--build-arg', name+'='+value]
-            run(args+['.'])
-            digest = registry_digest(tag)
-            if digest is None:
-                raise RuntimeError('Published base manifest is missing')
-            rebuilt.append(kind)
+        metadata = context/(kind+'-metadata.json')
+        run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push',
+             '--build-context', f'resolved={context}', '--file', 'Containerfile.base',
+             '--target', kind+'-base', '--tag', BASE_IMAGE+':'+kind+'-'+os.environ['GITHUB_SHA'],
+             '--metadata-file', str(metadata),
+             '--build-arg', 'PYTHON_IMAGE='+lock['python_image'],
+             '--build-arg', 'NODE_IMAGE='+lock['node_image'],
+             '--build-arg', 'YARN_VERSION='+lock['yarn'], '.'])
+        digest = json.loads(metadata.read_text())['containerimage.digest']
+        if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+            raise ValueError('Invalid published base digest')
         images[kind] = BASE_IMAGE+'@'+digest
         smoke_base(images[kind], kind)
-
-    data = {'schema': 2, 'key': key, 'images': images, 'rebuilt': rebuilt,
-            'inputs': {name: lock[name] for name in BASE_FIELDS},
-            'verification_inputs': {name: lock[name] for name in ('trivy_image', 'grype_image', 'mariadb_image', 'redis_image')},
-            'bootstrap': json.loads((ROOT/'resources/bootstrap.json').read_text())}
+    data = {'schema': 2, 'images': images, 'inputs': inputs,
+            'verification_inputs': {name: lock[name] for name in
+                ('trivy_image', 'grype_image', 'mariadb_image', 'redis_image')},
+            'bootstrap': lock['bootstrap']}
     (OUT/'base-images.json').write_text(json.dumps(data, indent=2)+'\n')
-    summary = f"Base images: {key}; rebuilt: {', '.join(rebuilt) or 'none (GHCR reuse)'}.\n"
-    summary += '\n'.join(f'{kind}: {ref}' for kind, ref in images.items())+'\n'
-    print(summary)
-    if os.environ.get('GITHUB_STEP_SUMMARY'):
-        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as handle:
-            handle.write(summary)
-    if os.environ.get('GITHUB_OUTPUT'):
-        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
-            for kind, ref in images.items():
-                handle.write(f'{kind}={ref}\n')
 
 
 def locked_base_images(lock):
@@ -131,34 +84,17 @@ def locked_base_images(lock):
     return metadata['images']
 
 
-def select_profile(lock, profile):
-    if profile not in ('erpnext', 'frappe'):
-        raise ValueError('Unknown build profile')
-    result = json.loads(json.dumps(lock))
-    result['profile'] = profile
-    if profile == 'frappe':
-        apps = [app for app in result['apps'] if app['name'] == 'frappe']
-        if len(apps) != 1 or not re.fullmatch(r'v\d+\.\d+\.\d+', apps[0]['ref']):
-            raise ValueError('Missing stable Frappe source')
-        result['apps'] = apps
-        result['frappe_tag'] = apps[0]['ref']
-        result.pop('erpnext_tag', None)
-        result['community_patches'] = {name: patch for name, patch in result['community_patches'].items()
-                                       if name == 'frappe'}
-    return result
-
 def build():
-    lock = select_profile(load(), PROFILE)
+    lock = load()
     bases = locked_base_images(lock)
     lock['base_images'] = bases
     (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     args = ['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--load',
             '--build-context', f'resolved={OUT}', '--file',
-            'Containerfile.frappe' if PROFILE == 'frappe' else 'Containerfile', '--tag', IMAGE]
+            'Containerfile', '--tag', IMAGE]
     values = {'RUNTIME_BASE_IMAGE': bases['runtime'], 'BUILDER_BASE_IMAGE': bases['builder'],
               'BENCH_VERSION': lock['bench'],
-              ('FRAPPE_TAG' if PROFILE == 'frappe' else 'ERPNEXT_TAG'):
-                  lock['frappe_tag' if PROFILE == 'frappe' else 'erpnext_tag'],
+              'ERPNEXT_TAG': lock['erpnext_tag'],
               'SOURCE_REVISION': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
     for key, value in values.items():
         args += ['--build-arg', f'{key}={value}']
@@ -304,7 +240,6 @@ def assess_report(data, exceptions=(), advisory=False, verified_fixed=(), verifi
     return dict(accepted=accepted, blocking=blocking, advisory=reported, verified_fixed=patched, verified_not_affected=unaffected)
 
 
-
 def scan_chromium(lock, cache):
     from chromium import component
     chrome = component(lock['chromium'])
@@ -348,43 +283,6 @@ def smoke_base(image, kind):
               if kind == 'builder' else
               "assert not any(shutil.which(x) for x in ('gcc','npm','yarn'))")
     run(['docker', 'run', '--rm', '--entrypoint', 'python', image, '-c', check])
-
-
-def refresh_base():
-    from base_manifest import MANIFEST, validate
-    metadata = validate(json.loads((ROOT/MANIFEST).read_text()), require_verified=False)
-    previous = dict(metadata['images'])
-    config = json.loads((ROOT/'resources/bootstrap.json').read_text())
-    files = {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
-             for name in ('Containerfile.base-maintenance', 'scripts/bootstrap.py', 'resources/bootstrap.json')}
-    key = hashlib.sha256(json.dumps({'parents': previous, 'files': files}, sort_keys=True).encode()).hexdigest()
-    for kind in ('runtime', 'builder'):
-        tag = BASE_IMAGE+':'+kind+'-maintenance-'+key
-        digest = registry_digest(tag)
-        if digest is None:
-            run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push',
-                 '--file', 'Containerfile.base-maintenance', '--tag', tag,
-                 '--build-arg', 'BASE_IMAGE='+previous[kind], '--build-arg', 'BOOTSTRAP_KIND='+kind, '.'])
-            digest = registry_digest(tag)
-            if digest is None:
-                raise RuntimeError('Maintenance base publication is missing')
-        metadata['images'][kind] = BASE_IMAGE+'@'+digest
-    metadata.update(key=key, parents=previous, bootstrap=config, security={'status': 'pending'})
-    OUT.mkdir(exist_ok=True)
-    (OUT/'base-images.json').write_text(json.dumps(metadata, indent=2)+'\n')
-    (OUT/'lock.json').write_text(json.dumps({**metadata['inputs'], **metadata['verification_inputs'],
-        'bootstrap': config, 'base_parents': previous}, indent=2)+'\n')
-
-
-def prepare_base():
-    from base_manifest import MANIFEST, validate
-    metadata = validate(json.loads((ROOT/MANIFEST).read_text()), require_verified=False)
-    lock = {**metadata['inputs'], **metadata['verification_inputs'],
-            'bootstrap': metadata['bootstrap'], 'base_parents': metadata.get('parents', {})}
-    OUT.mkdir(exist_ok=True)
-    (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
-    # Exact selected digests only. No resolver, source comparison or builder call.
-    (OUT/'base-images.json').write_text(json.dumps(metadata, indent=2)+'\n')
 
 
 def scan_base():
@@ -554,4 +452,4 @@ def scan_with_cache(cache, stage='runtime'):
 
 if __name__ == '__main__':
     os.chdir(ROOT)
-    {'config': config, 'base': base, 'build': build, 'integration': integration, 'scan': scan, 'scan-base': scan_base, 'prepare-base': prepare_base, 'refresh-base': refresh_base}[sys.argv[1]]()
+    {'config': config, 'base': base, 'build': build, 'integration': integration, 'scan': scan, 'scan-base': scan_base}[sys.argv[1]]()

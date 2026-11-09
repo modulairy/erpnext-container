@@ -22,11 +22,8 @@ def api(method, path, payload=None):
         raise RuntimeError(f'GitHub release API failed: {method} {path}, HTTP {error.code}') from None
 
 
-def publish(lock, digest, repository, revision, run_id, run_number, component='erpnext'):
-    if component not in ('erpnext', 'frappe'):
-        raise ValueError('Unexpected release component')
-    tag = lock['frappe_tag' if component == 'frappe' else 'erpnext_tag']
-    source_tag = ('frappe-' if component == 'frappe' else '')+tag
+def publish(lock, digest, repository, revision, run_id, run_number):
+    tag = source_tag = lock['erpnext_tag']
     if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
         raise ValueError('Invalid application tag')
     if repository != 'modulairy/erpnext-container' or not re.fullmatch('[0-9a-f]{40}', revision):
@@ -44,11 +41,11 @@ def publish(lock, digest, repository, revision, run_id, run_number, component='e
         raise ValueError('Release tag already identifies another source; refusing to move it')
     if not ref:
         api('POST', base+'/git/refs', {'ref':'refs/tags/'+release_tag, 'sha':revision})
-    image = 'ghcr.io/modulairy/'+component+':'+tag
+    image = 'ghcr.io/modulairy/erpnext:'+tag
     versions = '\n'.join(f"- {a['name']}: {a['ref']} (`{a['sha']}`)" for a in lock['apps'])
     backports = '\n'.join(f"- {name}: {entry['upstream_pr']} (patch SHA-256 `{entry['sha256']}`)"
                          for name, entry in lock.get('community_patches', {}).items())
-    body = (f'{component.title()} image: `{image}`\n\n'
+    body = (f'ERPNext image: `{image}`\n\n'
         f'Immutable image: `{image.split(":")[0]}@{digest}`\n\n'
         f'Source: `{revision}`; Bench: `{lock.get("bench", "recorded in lock")}`\n\n'
         f'[Build, test and publication evidence](https://github.com/{repository}/actions/runs/{run_id})\n\n'
@@ -61,7 +58,7 @@ def publish(lock, digest, repository, revision, run_id, run_number, component='e
         ('\n\nReviewed Frappe 16 backports:\n'+backports if backports else ''))
     release = api('GET', base+'/releases/tags/'+release_tag)
     payload = {'tag_name':release_tag,'target_commitish':revision,'name':release_tag,
-               'body':body,'draft':False,'prerelease':False,'make_latest':'false' if component == 'frappe' else 'true'}
+               'body':body,'draft':False,'prerelease':False,'make_latest':'true'}
     if release:
         if release.get('immutable'):
             if digest not in release.get('body',''):
@@ -81,7 +78,7 @@ def publish(lock, digest, repository, revision, run_id, run_number, component='e
 if __name__ == '__main__':
     url = publish(json.loads(Path('verified/lock.json').read_text()), os.environ['IMAGE_DIGEST'],
         os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA'],
-        os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_NUMBER'], os.environ.get('RELEASE_COMPONENT', 'erpnext'))
+        os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_NUMBER'])
     print(url)
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
         summary.write('GitHub Release: '+url+'\n')

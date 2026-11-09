@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+from apps import APPS
 from security import overlay, prune_build_tools, verify_overrides
 from pdf_overlay import apply_pdf
 from community_overlay import apply_community
@@ -18,12 +19,7 @@ def install():
     lock = json.loads(Path('/opt/build/lock.json').read_text())
     bench = Path('/home/frappe/frappe-bench')
     sources = Path('/home/frappe/sources')
-    allowed = {'frappe', 'erpnext', 'payments', 'telephony', 'helpdesk', 'builder',
-               'webshop', 'crm', 'wiki', 'print_designer'}
-    if lock.get('profile', 'erpnext') == 'frappe':
-        allowed = {'frappe'}
-    elif lock.get('profile', 'erpnext') != 'erpnext':
-        raise ValueError('Unknown application profile')
+    allowed = set(APPS)
     if {a['name'] for a in lock['apps']} != allowed:
         raise ValueError('Unexpected application set')
     sources.mkdir()

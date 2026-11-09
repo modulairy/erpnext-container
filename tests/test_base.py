@@ -1,7 +1,5 @@
-import copy
 import json
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,35 +10,28 @@ import pipeline
 
 
 class BaseImageTests(unittest.TestCase):
+    def test_manual_build_records_pushed_digests_and_source_date(self):
+        lock = {name: name+'-locked' for name in pipeline.BASE_FIELDS}
+        lock.update(resolved_at='2026-11-09T00:00:00+00:00', bootstrap={},
+                    trivy_image='trivy', grype_image='grype', mariadb_image='db', redis_image='redis')
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out/'lock.json').write_text(json.dumps(lock))
+            (out/'mariadb-keyring.asc').write_text('test key')
+            def run(args):
+                if args[:3] == ['docker', 'buildx', 'build']:
+                    Path(args[args.index('--metadata-file')+1]).write_text(
+                        json.dumps({'containerimage.digest': 'sha256:'+'a'*64}))
+            with patch.object(pipeline, 'OUT', out), patch.object(pipeline, 'run', side_effect=run), \
+                 patch.object(pipeline, 'smoke_base'), patch.dict('os.environ', {'GITHUB_SHA': 'b'*40}):
+                pipeline.base()
+            self.assertEqual(json.loads((out/'base/lock.json').read_text())['resolved_at'], lock['resolved_at'])
+            self.assertEqual(set(json.loads((out/'base-images.json').read_text())['images']), {'runtime', 'builder'})
+
     def setUp(self):
         self.lock = {name: name+'-locked' for name in pipeline.BASE_FIELDS}
         self.lock.update(bootstrap={}, apps=[{'sha': 'app-a'}], bench='5.0', resolved_at='first')
         self.digest = 'sha256:'+'a'*64
-
-    def test_app_and_bench_updates_reuse_base(self):
-        changed = copy.deepcopy(self.lock)
-        changed.update(apps=[{'sha': 'app-b'}], bench='6.0', resolved_at='second')
-        self.assertEqual(pipeline.base_key(self.lock), pipeline.base_key(changed))
-
-    def test_every_base_input_invalidates_cache(self):
-        for name in pipeline.BASE_FIELDS:
-            changed = copy.deepcopy(self.lock)
-            changed[name] = 'new-input'
-            self.assertNotEqual(pipeline.base_key(self.lock), pipeline.base_key(changed), name)
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root/'scripts').mkdir()
-            (root/'Containerfile.base').write_text('base')
-            (root/'scripts/os_backports.py').write_text('backports')
-            (root/'scripts/chromium.py').write_text('chromium')
-            (root/'scripts/python_expat.py').write_text('python XML modules')
-            (root/'scripts/bootstrap.py').write_text('bootstrap')
-            (root/'resources').mkdir()
-            (root/'resources/bootstrap.json').write_text('{}')
-            with patch.object(pipeline, 'ROOT', root):
-                first = pipeline.base_key(self.lock)
-                (root/'scripts/os_backports.py').write_text('updated backports')
-                self.assertNotEqual(first, pipeline.base_key(self.lock))
 
     def test_consumer_uses_approved_digest_without_source_hash_check(self):
         from base_manifest import policy_hash
@@ -53,8 +44,7 @@ class BaseImageTests(unittest.TestCase):
                                      'reports': {'runtime': 'a'*64, 'builder': 'b'*64}}}
             path = Path(directory)/'base-images.json'
             path.write_text(json.dumps(metadata))
-            with patch.object(pipeline, 'base_key', side_effect=AssertionError('No source check permitted')):
-                self.assertEqual(pipeline.locked_base_images(self.lock), metadata['images'])
+            self.assertEqual(pipeline.locked_base_images(self.lock), metadata['images'])
             metadata['images']['runtime'] = pipeline.BASE_IMAGE+':latest'
             path.write_text(json.dumps(metadata))
             with self.assertRaises(ValueError):
@@ -65,17 +55,3 @@ class BaseImageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 pipeline.locked_base_images(self.lock)
 
-    def test_registry_auth_errors_do_not_trigger_rebuild(self):
-        for message in ('unauthorized: authentication required', 'connection timed out'):
-            result = subprocess.CompletedProcess([], 1, '', message)
-            with patch.object(pipeline.subprocess, 'run', return_value=result):
-                with self.assertRaises(RuntimeError):
-                    pipeline.registry_digest('base:tag')
-
-    def test_registry_missing_and_pinned_manifest(self):
-        result = subprocess.CompletedProcess([], 1, '', 'manifest unknown: not found')
-        with patch.object(pipeline.subprocess, 'run', return_value=result):
-            self.assertIsNone(pipeline.registry_digest('base:tag'))
-        result = subprocess.CompletedProcess([], 0, json.dumps(self.digest), '')
-        with patch.object(pipeline.subprocess, 'run', return_value=result):
-            self.assertEqual(pipeline.registry_digest('base:tag'), self.digest)

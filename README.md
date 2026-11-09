@@ -1,61 +1,29 @@
 # Community ERPNext container
 
-Builds `ghcr.io/modulairy/erpnext:<ERPNext-release-tag>` from public upstream sources. GitHub Actions starts **only manually**. Base creation is a separate manual workflow. Application workflows only consume approved immutable base images; no push, PR, release or scheduled triggers are configured.
+Two manual Actions build one complete application image on a separately prepared OS base.
 
-## Applications and versions
+| Action | Purpose |
+| --- | --- |
+| **ERPNext base images** | Build and scan the OS bases; on main, select their approved immutable digests. |
+| **Community ERPNext** | Use the approved bases, install all applications, test and scan. Enable `publish` on main to publish GHCR, tag and Release. |
 
-Includes Frappe, ERPNext, Helpdesk, Telephony, Builder, Payments, Webshop, CRM, Wiki and Print Designer. Writer is excluded because it requires Drive. No Modulairy application, private repository, ACR base image or SCM credential is used.
+No push, PR, release or scheduled build triggers are configured. Application builds never invoke or rebuild the base. Previously published Frappe-only images remain available, but this repository no longer builds that separate profile.
 
-Each run enumerates official stable GitHub releases and resolves declared app dependencies. The reviewed framework line is v16; future major versions require a runtime/test policy update. Python 3.14 and Node 24 LTS use the newest compatible patch releases; Bench and Yarn 1 are resolved from their official registries. All app sources are locked to commit SHAs and base/test/scanner images to registry digests before building.
+## Base and applications
 
-Telephony (`develop`), Payments (`version-16`) and Webshop (`version-16`) currently have no published releases. They use explicit, immutable commit snapshots and are identified as such in `image-lock.json`. Payments/Webshop `develop` require Frappe 17 and cannot be used with stable v16. Missing metadata, undeclared app dependencies or an incompatible complete set stops the run. Metadata compatibility is only a candidate check: installation and runtime tests must also pass.
+`Containerfile.base` has runtime and builder targets in `ghcr.io/modulairy/erpnext-base`. Both stop before Bench. Runtime includes Python, Node, Chrome, Nginx and system dependencies. Builder adds npm, Yarn and build libraries; these tools stay out of the final runtime. The manual base Action uses Docker layer caching, validates both targets with the shared security gate, then updates only `resources/base-images.json` on main. Concurrent main changes reject this update. There is no separate maintenance or verify-only mode.
 
-The GHCR tag is the selected ERPNext release, for example `v16.54.0`. Rebuilding that ERPNext release can update the same tag when another app, snapshot or security package changes. Use the reported image digest for immutable deployments. No `latest` tag is published. The complete source/runtime selection is in `/home/frappe/frappe-bench/image-lock.json` and the Actions reports.
+`Containerfile` installs Bench and the application set declared in `scripts/apps.py`: Frappe, ERPNext, Payments, Telephony, Helpdesk, Builder, Webshop, CRM, Wiki and Print Designer. The resolver selects compatible stable releases within Frappe 16 and records exact commits. Payments/Webshop use `version-16` and Telephony uses `develop` snapshots because they lack published releases. Unknown dependencies or an incompatible set stop the build. An incompatible base runtime requires a separate manual base update.
 
-## Manual build and publication
+The published image is `ghcr.io/modulairy/erpnext:<ERPNext-version>`, with no `latest` image tag. Rebuilds may update that version tag; deploy using the reported digest. Git source tags remain immutable: another source revision for the same version uses `<version>-<short-commit>`. The Release records every application commit, Bench version and image digest. `image-lock.json` inside the image and Actions artifacts contain the full selection.
 
-In **Actions > Community ERPNext > Run workflow**, choose a branch and leave `publish` disabled for validation. After reviewing and merging the PR, run on `main` with `publish` enabled to publish. The repository's `GITHUB_TOKEN` needs GHCR package write access; the first package may need its visibility set to public in GitHub package settings. No personal registry token is required.
+## Validation and security
 
-Every build is followed by an isolated site installation and migration for every included app, HTTP/login/API CRUD checks, static asset requests, websocket connectivity, real jobs on all three worker queues and runtime process checks. MariaDB and Redis are temporary test services, with generated credentials and no production access. Reports and sanitized logs are retained for 14 days. Temporary containers, networks and volumes are removed on completion/failure.
+Every application build installs/migrates all apps on disposable sites and tests login/API CRUD, assets, queues, realtime, PDFs and HTTP cache. MariaDB and Redis are external test services. The publish job receives the exact tested image and checks its image ID; it does not rebuild. SBOM and provenance attestations are published with its digest. Reports are retained for 14 days.
 
-Trivy scans the image's OS/language dependencies and secrets, and the repository's configuration and secrets. Unaccepted HIGH/CRITICAL findings, scanner errors or failed tests block publication. `security-exceptions.json` records owner-accepted application findings by exact CVE, package, installed version, severity and scanner type. These are accepted risks, not fixes; a changed version or new finding requires review. Raw reports retain all findings, and `gate-security.json` distinguishes accepted, advisory and blocking results. SBOM and provenance attestations accompany publication. Passing smoke tests is not a guarantee that every application feature is covered.
+Base and application images share HIGH/CRITICAL and secret/configuration scanning rules. Scanner errors and new/unmatched findings block publication. Exact accepted OS risks, verified source fixes and the original builder's 68 scoped advisories remain separately reported; they are not blanket exclusions. External MariaDB findings are advisory; Redis findings and secrets block. Passing does not mean there are no known vulnerabilities.
 
-`security-policy.json` defines reviewed dependency update ranges. Each run selects stable versions from PyPI/npm, applies explicit source overlays before installation and frontend compilation, and records the changes in the image lock. These overlays intentionally differ from upstream dependency pins; image-codec, PDF-reader, file-lock and GitPython checks supplement integration tests. A newer upstream requirement that would be downgraded stops the build for policy review.
-
-npm/Yarn are confined to the builder; pip and esbuild compiler packages are removed from the final runtime after installation and asset generation. Add or update dependencies through a rebuilt image. Other node_modules are retained because public asset symlinks serve some files directly; their package metadata remains available to the scanner. MariaDB and Redis image digests are also scanned separately. External MariaDB vulnerabilities are advisory by owner decision; Redis vulnerabilities remain blocking. Scanner errors and secret findings remain blocking for both services.
-
-Security overlays update direct dependency declarations as well as Yarn resolutions. Upstream Yarn locks are regenerated within the reviewed ranges, and installed package versions are checked before asset compilation. Explicit major migrations are listed in the policy and must pass the same build and runtime tests. MariaDB client libraries inside the ERPNext image use the newest common 11.8 patch from MariaDB's signed Debian 13 repository; the external MariaDB service remains an official image and has a separate vulnerability report.
-
-Plyr stays on 3.7.8 because 3.8 changes the deep import used by this Frappe release. Helpdesk uses the patched Vite 7 line because Vite 8 rejects duplicate imports in its current source. Other applications use Vite 8. Revisiting these compatibility limits requires a successful frontend build.
-
-Curl library packages use the newest common version from signed Debian 13 backports. The installed MariaDB client and curl versions are checked against the image lock during integration tests.
-
-Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard rejects new adapter consumers; runtime tests exercise the actual email and phone validators. ACL 2.4.0, ncurses 6.6, Perl 5.42.3 and systemd 262.1 source packages are rebuilt against Debian 13 in an isolated stage, with package tests enabled. Only the selected runtime packages are installed, including systemd's client libraries rather than its daemon. Signed Debian source indexes and locked source SHA256 values protect the inputs; source and binary provenance is retained in the image lock. These reviewed source versions fail closed if unavailable. No unstable binary repository is installed. A backported fix can still be reported by the distribution security feed; those findings remain visible and block unless their exact record is explicitly accepted.
-
-The same stage packages upstream libX11 1.8.14, libXrender 0.9.13 and libXtst 1.2.6 with their locked Debian packaging and applies the reviewed libsndfile CVE-2026-37555 patch. Upstream archives and the patch have pinned SHA256 values; custom package versions use `+container1`. Strict symbol checks stay enabled. Integration tests load the X libraries and exercise libsndfile's real WAV IMA-ADPCM overflow path with a sparse metadata fixture, alongside the Chromium PDF tests.
-
-The application build job has only package read permission. A separate base-image job has package write permission for the shared dependency images. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
-
-After a successful push and provenance/SBOM attestations, the publish job creates a Git tag and GitHub Release containing the image digest, source revision, locked applications and Actions evidence. The first release uses the ERPNext tag; rebuilding that ERPNext version from a different source revision uses `<ERPNext-tag>-<7-character-commit-SHA>`. Existing source tags are never moved. The GHCR tag remains the ERPNext tag. Only the publish job has the repository write permission needed for tags/releases. Logout runs last, including on failure.
-
-
-## Frappe framework image
-
-**Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the approved ready base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
-
-The runtime uses a version/hash-pinned official Chrome for Testing headless shell. A separate pinned Grype product scan must detect a known affected Chrome control and find no high/critical issues in the selected release. Raw results are retained. Reviewed Debian source fixes pass only when the official fixed version, locked source hashes, installed package version and package integrity agree; unmatched findings remain blocking. Python's pyexpat and ElementTree modules are rebuilt from the exact CPython source against the reviewed Expat and verified in the installed image.
-
-## Shared base images
-
-`Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Both stop before Bench installation. Runtime contains Python, Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder adds npm/Yarn, compilers and development libraries; these tools do not enter the final application image.
-
-**Actions > ERPNext base images > Run workflow** on `main` is the only way to create or rebuild the base. Leave `rebuild` disabled to verify and select the exact ready digests already recorded in the manifest, with no runtime resolution or compilation; enable it explicitly to resolve new runtime inputs and rebuild. Both base images must pass native smoke checks and the same HIGH/CRITICAL security gate, approved exact exceptions and verified-source rules used by applications. Raw reports are retained. The owner-approved exact 68 build-only records in `security-builder-advisories.json` are advisory only for the reviewed builder parent, package versions and vulnerability IDs; unmatched findings and secrets block. Runtime/Frappe use the same production gate without these builder advisories. CVE-2025-47273 is classified as not affected only after the reviewed official pip wheel and installed files match and the vulnerable setuptools module is absent.
-
-Select `refresh_bootstrap` (with `rebuild` disabled) to update only hash-locked pip/ensurepip and the compatible npm 11 patch on the selected ready images. This uses `Containerfile.base-maintenance` and never compiles OS sources. The two update operations are mutually exclusive.
-
-After successful verification, the manual base workflow updates only `resources/base-images.json` on `main` with the immutable runtime/builder digests, locked runtime inputs and verification evidence. A concurrent main update stops manifest publication instead of overwriting work.
-
-Frappe and ERPNext runs read this manifest directly. They never call the base workflow, compare base source hashes or rebuild a base. Python, Node, Yarn and OS inputs come from the selected base; Bench and application sources are resolved against those versions. A missing approved manifest or incompatible runtime stops the application run and requires a manual base update. Re-running an application cannot update the selected base.
+Reviewed Debian source builds, CPython XML-module fixes, pinned Chrome with a positive scanner control, dependency security overrides and source-integrity checks are retained. `security-policy.json` defines reviewed dependency ranges; major changes and upstream patch drift fail closed. Raw findings and evidence remain available. npm/Yarn, pip and asset compilers are removed from the application runtime as before; libraries serving assets remain.
 
 ## Reviewed Frappe 16 backports
 
@@ -76,7 +44,7 @@ Keep the scheduler and long workers running. Indexing happens after database com
 
 One image supports separate `backend` (default), `frontend`, `websocket`, `scheduler`, `worker-short`, `worker-default` and `worker-long` containers. Other commands are passed through, for example `bench --site example.com migrate`. Run as the included non-root `frappe` user. Use persistent volumes for `/home/frappe/frappe-bench/sites` and `/home/frappe/frappe-bench/logs`; do not mount a separate assets volume, because image assets must match application code. All service roles must use the same image digest.
 
-Classic prints, report exports and Print Designer use the distribution-maintained Chromium. The image removes pdfkit and wkhtmltopdf. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
+Classic prints, report exports and Print Designer use the version/hash-pinned official Chrome headless shell. The image removes pdfkit and wkhtmltopdf. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
 
 Containers that render PDFs require Linux user namespaces and the supplied `resources/chromium-seccomp.json` profile, with `cap_drop: [ALL]`, `no-new-privileges:true`, and `init: true` (see `tests/compose.yaml`). The profile derives from [Playwright's Docker profile](https://github.com/microsoft/playwright/blob/v1.64.0/utils/docker/seccomp_profile.json), adding `chroot` so Chromium can isolate itself inside its user namespace without host capabilities. Configure the profile on the Docker host; it cannot be enabled from inside the image. Hosts that prohibit unprivileged user namespaces must receive a narrowly scoped administrator policy change before running this image. The renderer fails closed; do not disable the sandbox, use privileged containers or grant `SYS_ADMIN`.
 
@@ -108,16 +76,22 @@ Changed or deleted public files can remain cached until their TTL expires. Bump 
 
 ## Local verification
 
-Requires Python 3.14, Docker with Buildx/Compose, network access and sufficient disk space for the multi-app build. Set `GITHUB_TOKEN` in the process environment to avoid unauthenticated API limits. It is used only by the resolver, never passed into the container build. Optionally set `BUILD_DIR` to an absolute output directory.
+Use Python 3.14 and install `requirements-ci.txt`. Offline checks:
 
-```sh
-python -m pip install -r requirements-ci.txt
+```bash
 python -m unittest discover -s tests -v
+bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
+```
+
+Building requires Docker Buildx/Compose, network access and sufficient disk space. Set `GITHUB_TOKEN` in the process environment for API access; it is never passed into builds. Authenticate GHCR pulls first. To test applications on the selected base:
+
+```bash
 python scripts/resolve.py
-bash scripts/base-image.sh # GHCR_USER and GHCR_TOKEN must be set
 python scripts/pipeline.py build
 python scripts/pipeline.py integration
 python scripts/pipeline.py scan
 ```
 
-Container layout follows the official [Frappe Docker](https://github.com/frappe/frappe_docker) approach. Upstream application licenses remain applicable to their bundled sources.
+Base preparation is separate: `bash scripts/base-image.sh` requires `GHCR_USER`, `GHCR_TOKEN` and `GITHUB_SHA`, then `python scripts/pipeline.py scan-base` verifies the result. Use the manual Action to select verified digests on main. Never invoke base preparation from application builds.
+
+Upstream application licenses remain applicable to bundled sources.

@@ -21,7 +21,7 @@ COPY --from=resolved lock.json /opt/build/lock.json
 RUN pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["security_overrides"]["python"]; subprocess.run(["python","-m","pip","install","--upgrade"]+[k+"=="+p[k] for k in ("pip","setuptools","urllib3")],check=True)' \
     && python -m pip check
-COPY scripts/build.py scripts/security.py scripts/pdf_overlay.py scripts/community_overlay.py /opt/build/
+COPY scripts/apps.py scripts/build.py scripts/security.py scripts/pdf_overlay.py scripts/community_overlay.py /opt/build/
 COPY patches/ /opt/build/patches/
 COPY resources/chrome_pdf_generator.py resources/pdf_resources.py /opt/build/pdf/
 USER frappe

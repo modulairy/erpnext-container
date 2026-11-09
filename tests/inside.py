@@ -62,8 +62,7 @@ def setup():
 
 
 def verify():
-    if LOCK.get('profile') != 'frappe':
-        command('node', '/tests/zod_test.cjs')
+    command('node', '/tests/zod_test.cjs')
     command('python', '/tests/os_test.py')
     for source in LOCK['os_backport_provenance'].values():
         for name in source['build_only_binaries']:
@@ -186,8 +185,8 @@ def verify():
     frappe.db.commit()
     session.cookies.clear()
     session.headers['Authorization'] = f'token {key}:{secret}'
-    doctype = 'ToDo' if LOCK.get('profile') == 'frappe' else 'UOM'
-    fields = {'description': 'Container Smoke Task', 'status': 'Open'} if doctype == 'ToDo' else {'uom_name': 'Container Smoke Unit'}
+    doctype = 'UOM'
+    fields = {'uom_name': 'Container Smoke Unit'}
     response = session.post(base+'/api/resource/'+doctype, json=fields, timeout=30)
     if not response.ok:
         detail = response.text.replace(secret, '[REDACTED]').replace(key, '[REDACTED]')
@@ -202,20 +201,16 @@ def verify():
     response.raise_for_status()
     # All three queue roles must execute an actual job, not merely start a process.
     print('PASS: authenticated API CRUD and application inventory', flush=True)
-    from pdf_test import verify_pdf, verify_frappe_pdf
-    (verify_frappe_pdf if LOCK.get('profile') == 'frappe' else verify_pdf)(session, base)
+    from pdf_test import verify_pdf
+    verify_pdf(session, base)
     from cache_test import verify_cache
     verify_cache()
     frappe.db.commit()
     assert frappe.conf.allow_tests, 'Application tests must be explicitly enabled on the disposable site'
-    if LOCK.get('profile') == 'frappe':
-        from community_test import symlink_discovery
-        symlink_discovery()
-    else:
-        command('bench', '--site', SITE, 'run-tests', '--app', 'helpdesk',
-                '--module', 'helpdesk.tests.test_ticket_search_backend')
-        from community_test import verify_community
-        verify_community(session, base)
+    command('bench', '--site', SITE, 'run-tests', '--app', 'helpdesk',
+            '--module', 'helpdesk.tests.test_ticket_search_backend')
+    from community_test import verify_community
+    verify_community(session, base)
     jobs = [frappe.enqueue('frappe.utils.now', queue=q, job_name=f'container-smoke-{q}')
             for q in ('short', 'default', 'long')]
     deadline = time.monotonic() + 120

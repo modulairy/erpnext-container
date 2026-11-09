@@ -82,7 +82,7 @@ def verify_pdf(session, base):
         'posting_date': frappe.utils.today(), 'due_date': frappe.utils.today(), 'currency': 'USD',
         'conversion_rate': 1, 'debit_to': receivable, 'selling_price_list': price_list,
         'price_list_currency': 'USD', 'plc_conversion_rate': 1, 'items': [
-            {'item_name': 'Sandbox PDF item', 'description': 'İstanbul Şişli invoice test',
+            {'item_name': 'Sandbox PDF item', 'description': 'Ä°stanbul ÅžiÅŸli invoice test',
              'qty': 2, 'rate': 12.5, 'uom': 'Nos', 'income_account': income, 'cost_center': cost_center}
         ]}).insert()
     frappe.db.commit()
@@ -103,7 +103,7 @@ def verify_pdf(session, base):
     (folder/'invoice.pdf').write_bytes(response.content)
     reader = PdfReader(io.BytesIO(response.content))
     text = '\n'.join(page.extract_text() for page in reader.pages)
-    assert invoice.name in text and 'İstanbul Şişli invoice test' in text and '25.00' in text, text
+    assert invoice.name in text and 'Ä°stanbul ÅžiÅŸli invoice test' in text and '25.00' in text, text
     print('PASS: saved ERPNext Sales Invoice exported through authenticated Frappe PDF API', flush=True)
 
     records = frappe.get_all('Sales Invoice', filters={'name': invoice.name}, fields=['name', 'grand_total'])
@@ -122,41 +122,15 @@ def verify_pdf(session, base):
 
 
 
-def verify_frappe_pdf(session, base):
-    import frappe
-    from pypdf import PdfReader
-    folder = verify_sandbox()
-    todo = frappe.get_doc({'doctype': 'ToDo', 'description': 'İstanbul Şişli Frappe PDF', 'status': 'Open'}).insert()
-    frappe.db.commit()
-    response = session.post(base+'/api/method/frappe.utils.print_format.download_pdf',
-        data={'doctype': 'ToDo', 'name': todo.name, 'format': 'Standard', 'no_letterhead': 1}, timeout=100)
-    if not response.ok:
-        data = response.json()
-        raise AssertionError('Frappe PDF API failed: '+str(data.get('exception', data.get('exc_type', response.status_code)))[:240])
-    assert response.content.startswith(b'%PDF-')
-    (folder/'frappe.pdf').write_bytes(response.content)
-    text = '\n'.join(page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages)
-    assert 'İstanbul Şişli Frappe PDF' in text, text
-    html = frappe.render_template('<html><body><h1>Frappe Report</h1><p>{{ name }}</p></body></html>', {'name': todo.name})
-    response = session.post(base+'/api/method/frappe.utils.print_format.report_to_pdf',
-                            data={'html': html, 'orientation': 'Landscape'}, timeout=100)
-    response.raise_for_status()
-    reader = PdfReader(io.BytesIO(response.content))
-    assert todo.name in reader.pages[0].extract_text()
-    assert reader.pages[0].mediabox.width > reader.pages[0].mediabox.height
-    (folder/'report.pdf').write_bytes(response.content)
-    print('PASS: authenticated Frappe document/report PDF exports without ERPNext', flush=True)
-    verify_renderer(folder)
-
 def verify_renderer(folder):
     import frappe
     from pypdf import PdfReader, PdfWriter
     from frappe.utils.pdf import get_pdf
-    html = '<html><body><h1>İstanbul Şişli</h1><div style="break-before:page">Second page</div></body></html>'
+    html = '<html><body><h1>Ä°stanbul ÅžiÅŸli</h1><div style="break-before:page">Second page</div></body></html>'
     pdf = get_pdf(html, options={'password': 'test-only-password'})
     reader = PdfReader(io.BytesIO(pdf))
     assert reader.is_encrypted and reader.decrypt('test-only-password')
-    assert len(reader.pages) == 2 and 'İstanbul' in reader.pages[0].extract_text()
+    assert len(reader.pages) == 2 and 'Ä°stanbul' in reader.pages[0].extract_text()
     writer = PdfWriter()
     assert get_pdf(html, output=writer) is writer and len(writer.pages) == 2
     html = '''<html><head><style>body {font-family: sans-serif}</style></head><body>

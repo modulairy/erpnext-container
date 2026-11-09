@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 import tomllib
 from datetime import datetime, timezone
@@ -22,10 +23,7 @@ from semantic_version import NpmSpec, Version as NodeVersion
 
 # New framework majors require a reviewed runtime and integration test update.
 MAJOR = 16
-APPS = ('frappe', 'erpnext', 'payments', 'telephony', 'helpdesk', 'builder',
-        'webshop', 'crm', 'wiki', 'print_designer')
-SNAPSHOTS = {'payments': 'version-16', 'webshop': 'version-16',
-             'telephony': 'develop'}
+from apps import APPS, SNAPSHOTS
 STABLE = re.compile(r'^v?(\d+\.\d+\.\d+)$')
 
 
@@ -332,27 +330,27 @@ def pyexpat_sources(python):
                    'sha256': hashlib.sha256(request(f'https://raw.githubusercontent.com/python/cpython/v{python}/{path}')).hexdigest()}
             for name, path in files.items()}
 
-def runtime_inputs(rows, out, base_build):
-    from base_manifest import BASE_FIELDS, load
-    if not base_build:
-        manifest = load()
-        inputs = manifest['inputs']
-        python, node = inputs['python'], inputs['node']
-        if (not all(Version(python) in SpecifierSet(row['python']) for row in rows)
-                or not all(NpmSpec(spec).match(NodeVersion(node)) for row in rows for spec in row['node'])):
-            raise ValueError('Selected apps require a newer runtime; update the base manually')
-        (out/'base-images.json').write_text(json.dumps(manifest, indent=2)+'\n')
-        return {**inputs, 'bootstrap': manifest['bootstrap']}, manifest['security']['trivy_image'], manifest['security']['grype_image']
+def runtime_inputs(rows, out):
+    from base_manifest import load
+    manifest = load()
+    inputs = manifest['inputs']
+    python, node = inputs['python'], inputs['node']
+    if (not all(Version(python) in SpecifierSet(row['python']) for row in rows)
+            or not all(NpmSpec(spec).match(NodeVersion(node)) for row in rows for spec in row['node'])):
+        raise ValueError('Selected apps require a newer runtime; update the base manually')
+    (out/'base-images.json').write_text(json.dumps(manifest, indent=2)+'\n')
+    return {**inputs, 'bootstrap': manifest['bootstrap']}, manifest['security']['trivy_image'], manifest['security']['grype_image']
+
+
+def base_inputs(out):
     py_tags = api('repos/python/cpython/git/matching-refs/tags/v3.14.')
     versions = [r['ref'].split('/')[-1][1:] for r in py_tags
                 if STABLE.fullmatch(r['ref'].split('/')[-1])]
     python, python_image = published_runtime('python',
-        [v for v in versions if all(Version(v) in SpecifierSet(r['python']) for r in rows)], '-slim-trixie')
+        versions, '-slim-trixie')
     nodes = json.loads(request('https://nodejs.org/dist/index.json'))
     node, node_image = published_runtime('node',
-        [n['version'][1:] for n in nodes if n['lts'] and n['version'].startswith('v24.')
-                and all(NpmSpec(spec).match(NodeVersion(n['version'][1:]))
-                        for r in rows for spec in r['node'])], '-trixie-slim')
+        [n['version'][1:] for n in nodes if n['lts'] and n['version'].startswith('v24.')], '-trixie-slim')
     yarn_data = json.loads(request('https://registry.npmjs.org/yarn'))
     yarn = max((v for v in yarn_data['versions'] if STABLE.fullmatch(v)
                 and Version(v).major == 1), key=Version)
@@ -369,13 +367,19 @@ def main():
     from community_overlay import selected_patches
     out = Path(os.environ.get('BUILD_DIR', '.build')).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    base_build = os.environ.get('BASE_BUILD') == 'true'
-    profile = os.environ.get('BUILD_PROFILE', 'erpnext')
-    if profile not in ('frappe', 'erpnext'):
-        raise ValueError('Unknown build profile')
-    apps = ('frappe',) if profile == 'frappe' and not base_build else APPS
+    if sys.argv[1:] == ['--base']:
+        inputs, trivy, grype = base_inputs(out)
+        lock = {**inputs, 'resolved_at': datetime.now(timezone.utc).isoformat(),
+                'trivy_image': trivy, 'grype_image': grype,
+                'mariadb_image': image_digest('mariadb:11.8'),
+                'redis_image': image_digest('redis:8-alpine'),
+                'bootstrap': json.loads((Path(__file__).resolve().parents[1]/'resources/bootstrap.json').read_text())}
+        (out/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
+        return
+    if sys.argv[1:]:
+        raise ValueError('Use resolve.py or resolve.py --base')
     options = []
-    for app in apps:
+    for app in APPS:
         print(f'Reading releases: {app}', flush=True)
         releases = stable_releases(pages(f'repos/frappe/{app}/releases'))
         if app in ('frappe', 'erpnext'):
@@ -392,25 +396,22 @@ def main():
         raise ValueError('No compatible complete application set; publication blocked')
     rows = install_order(rows)
     selected = {r['name']: r for r in rows}
-    inputs, trivy_image, grype_image = runtime_inputs(rows, out, base_build)
+    inputs, trivy_image, grype_image = runtime_inputs(rows, out)
     python = inputs['python']
     bench = pypi_latest('frappe-bench', python)
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'apps': rows, **inputs, 'bench': bench,
-            'bootstrap': json.loads((Path(__file__).resolve().parents[1]/'resources/bootstrap.json').read_text()) if base_build else inputs['bootstrap'],
+            'bootstrap': inputs['bootstrap'],
             'security_overrides': security_versions(python),
             'mariadb_image': image_digest('mariadb:11.8'),
             'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': trivy_image, 'grype_image': grype_image,
             'pdf_engine': 'sandboxed-official-headless-shell'}
-    if profile == 'frappe' and not base_build:
-        lock.update(profile='frappe', frappe_tag=selected['frappe']['ref'])
-    else:
-        lock['erpnext_tag'] = selected['erpnext']['ref']
+    lock['erpnext_tag'] = selected['erpnext']['ref']
     lock['redis_lua'] = redis_lua(out)
     lock['community_patches'] = selected_patches(rows)
     (out/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
-    print(json.dumps({k: lock[k] for k in ('frappe_tag', 'erpnext_tag', 'python', 'node', 'bench') if k in lock}))
+    print(json.dumps({k: lock[k] for k in ('erpnext_tag', 'python', 'node', 'bench') if k in lock}))
     for row in rows:
         print(f"{row['name']}: {row['ref']} ({row['kind']}) @ {row['sha']}")
 

@@ -25,13 +25,26 @@ def approved():
 
 
 class ManualBaseTests(unittest.TestCase):
+    def test_base_resolution_never_resolves_apps_or_bench(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict('os.environ', {'BUILD_DIR': directory}), \
+             patch.object(sys, 'argv', ['resolve.py', '--base']), \
+             patch.object(resolve, 'base_inputs', return_value=({}, 'trivy', 'grype')), \
+             patch.object(resolve, 'image_digest', return_value='service'), \
+             patch.object(resolve, 'pages', side_effect=AssertionError('No application releases')), \
+             patch.object(resolve, 'pypi_latest', side_effect=AssertionError('No Bench resolution')):
+            resolve.main()
+            lock = json.loads((Path(directory)/'lock.json').read_text())
+            self.assertIn('resolved_at', lock)
+            self.assertNotIn('apps', lock)
+
     def test_app_resolution_uses_ready_base_without_registry_or_rebuild(self):
         data = approved()
         rows = [{'python': '>=3.14,<3.15', 'node': ['>=24 <25']}]
         with tempfile.TemporaryDirectory() as directory, patch.object(base_manifest, 'load', return_value=data), \
              patch.object(resolve, 'request', side_effect=AssertionError('No base discovery permitted')), \
              patch.object(resolve, 'image_digest', side_effect=AssertionError('No base registry lookup permitted')):
-            inputs, trivy, grype = resolve.runtime_inputs(rows, Path(directory), False)
+            inputs, trivy, grype = resolve.runtime_inputs(rows, Path(directory))
             self.assertEqual(inputs, {**data['inputs'], 'bootstrap': data['bootstrap']})
             self.assertEqual(trivy, data['security']['trivy_image'])
             self.assertEqual(grype, data['security']['grype_image'])
@@ -40,7 +53,7 @@ class ManualBaseTests(unittest.TestCase):
     def test_incompatible_runtime_requires_manual_update(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(base_manifest, 'load', return_value=approved()):
             with self.assertRaisesRegex(ValueError, 'update the base manually'):
-                resolve.runtime_inputs([{'python': '>=3.15', 'node': []}], Path(directory), False)
+                resolve.runtime_inputs([{'python': '>=3.15', 'node': []}], Path(directory))
 
     def test_missing_manifest_never_creates_base(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -80,22 +93,6 @@ class ManualBaseTests(unittest.TestCase):
         self.assertEqual([x['path'] for x in writes[0][2]['tree']], ['resources/base-images.json'])
         self.assertEqual(writes[1][2]['parents'], ['a'*40])
         self.assertEqual(writes[2][2], {'sha': 'c'*40, 'force': False})
-
-    def test_manual_verify_only_copies_ready_inputs_without_discovery_or_build(self):
-        data = approved()
-        data['security'] = {'status': 'pending'}
-        data['verification_inputs'] = {'trivy_image': 'locked', 'grype_image': 'locked',
-                                       'mariadb_image': 'locked', 'redis_image': 'locked'}
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root/'resources').mkdir()
-            (root/'resources/base-images.json').write_text(json.dumps(data))
-            with patch.object(pipeline, 'ROOT', root), patch.object(pipeline, 'OUT', root/'out'), \
-                 patch.object(pipeline, 'run', side_effect=AssertionError('No Docker/build calls')), \
-                 patch.object(pipeline, 'base_key', side_effect=AssertionError('No source key check')):
-                pipeline.prepare_base()
-                self.assertEqual(json.loads((root/'out/base-images.json').read_text()), data)
-                self.assertEqual(json.loads((root/'out/lock.json').read_text())['python'], '3.14.10')
 
     def test_integrity_only_allows_configured_missing_documentation(self):
         policy = 'path-exclude /usr/share/doc/*\npath-exclude /usr/share/man/*\npath-include /usr/share/doc/*/copyright\n'

@@ -2,17 +2,6 @@ name: ERPNext base images
 
 on:
   workflow_dispatch:
-    inputs:
-      rebuild:
-        description: 'Build/rebuild the base (disabled: verify selected ready images only)'
-        type: boolean
-        default: false
-        required: true
-      refresh_bootstrap:
-        description: 'Refresh pip/npm on selected ready images without OS compilation'
-        type: boolean
-        default: false
-        required: true
 
 permissions:
   contents: read
@@ -44,13 +33,11 @@ jobs:
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
           bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
-      - name: Build or reuse GHCR base images
+      - name: Build GHCR base images
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GHCR_TOKEN: ${{ github.token }}
           GHCR_USER: ${{ github.actor }}
-          BASE_REBUILD: ${{ inputs.rebuild }}
-          BASE_REFRESH: ${{ inputs.refresh_bootstrap }}
         run: bash scripts/base-image.sh
       - name: Verify base images with the shared security gate
         run: python scripts/pipeline.py scan-base
@@ -68,7 +55,6 @@ jobs:
           path: |
             .build/lock.json
             .build/mariadb-keyring.asc
-            .build/redis.lua
             .build/base-images.json
             .build/base-config.json
             .build/chromium*.json
