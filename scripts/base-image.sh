@@ -20,14 +20,17 @@ if [[ -z "$python_bin" ]] ||
 fi
 out="${BUILD_DIR:-.build}"
 mkdir -p "$out"
-"$python_bin" scripts/resolve.py 2>&1 | tee "$out/resolve.log"
-"$python_bin" scripts/pipeline.py config
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 trap 'docker logout ghcr.io' EXIT
-args=()
 case "${BASE_REBUILD:-false}" in
-    true) args+=(--rebuild) ;;
-    false) ;;
+    true)
+        BASE_BUILD=true "$python_bin" scripts/resolve.py 2>&1 | tee "$out/resolve.log"
+        "$python_bin" scripts/pipeline.py config
+        "$python_bin" scripts/pipeline.py base --rebuild
+        ;;
+    false)
+        "$python_bin" scripts/pipeline.py prepare-base
+        "$python_bin" scripts/pipeline.py config
+        ;;
     *) printf '%s\n' 'BASE_REBUILD must be true or false.' >&2; exit 1 ;;
 esac
-"$python_bin" scripts/pipeline.py base "${args[@]}"

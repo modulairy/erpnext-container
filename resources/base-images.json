@@ -1,0 +1,194 @@
+{
+  "schema": 2,
+  "key": "2a92f6102ab823484fd751936479824a7abf12e0456bd40546ee2f408297f900",
+  "images": {
+    "builder": "ghcr.io/modulairy/erpnext-base@sha256:05d8683fe63edcdc82d2022b72411f620944751e5b2cc0e3813ed9b90336eaf1",
+    "runtime": "ghcr.io/modulairy/erpnext-base@sha256:9deb58f0cb5214088c039fc1dc51b4bb08ca7d1cf2827ff4022d0e577adc37ef"
+  },
+  "inputs": {
+    "python": "3.14.10",
+    "node": "24.22.2",
+    "python_image": "python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f",
+    "node_image": "node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d",
+    "yarn": "1.22.22",
+    "mariadb_client": {
+      "repository": "https://deb.mariadb.org/11.8/debian",
+      "version": "1:11.8.9+maria~deb13",
+      "key_sha256": "00adb387f4c12e8982cfc28165d225695621494354cd58108c6845063bfb74b5"
+    },
+    "curl_backport": "8.21.0-2~bpo13+1",
+    "os_backports": {
+      "acl": {
+        "version": "2.4.0-1",
+        "files": {
+          "acl_2.4.0-1.dsc": "b987ebbeb3d498794bad29cd65301b77384978493d8765c94dba8bad8fa325b6",
+          "acl_2.4.0.orig.tar.xz": "e661131456d2708a01c614a0f400e11d7d1bfaeb6f3e74b75bb980b72f0161a3",
+          "acl_2.4.0.orig.tar.xz.asc": "5f4f0b9b78821764fe6b88e32aef6ec519628522c211c36706bcb78d6f3f036b",
+          "acl_2.4.0-1.debian.tar.xz": "65931c2fb3e821bda67f8d8d72d77e99ac61502748dcdf38b6805fe89339085e"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+      },
+      "expat": {
+        "version": "2.10.0-1",
+        "files": {
+          "expat_2.10.0-1.dsc": "8c4623c101959b8709a3f0a10c06a40d413dc7a6f5ffad3bc9d0cd010d850956",
+          "expat_2.10.0.orig.tar.gz": "b3644a12f62d7762b62c444f69d169ba0234f13138d0240244bca64cbe35286f",
+          "expat_2.10.0-1.debian.tar.xz": "9be65c3ff79ca0508590970422de0a55f117bb7134a0274dd1ed3261f85631dc"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+      },
+      "libsndfile": {
+        "version": "1.2.2-4",
+        "files": {
+          "libsndfile_1.2.2-4.dsc": "582a7b9cd2f7c0ada8bbbf9787e8f11d2e5778d065bb1c13644e44cdd878af83",
+          "libsndfile_1.2.2.orig.tar.gz": "ffe12ef8add3eaca876f04087734e6e8e029350082f3251f565fa9da55b52121",
+          "libsndfile_1.2.2-4.debian.tar.xz": "00796f90a34180460edf45b4d6930a004238136bd08c85b4a4c704fc30634a84"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz",
+        "binary_version": "1.2.2-4+container1",
+        "patch": {
+          "url": "https://github.com/libsndfile/libsndfile/commit/cdadf9a65fdc1f28da9d235eb443d5f5e57010d2.patch",
+          "sha256": "19828cfdc17b80f13c8d1fcc8b828ea5c328071d91171c6d80f94a2e1499b719"
+        }
+      },
+      "libx11": {
+        "version": "2:1.8.14-1",
+        "files": {
+          "libx11_1.8.14-1.dsc": "caf77758cf76511d937b4f876d254f28ea05fd83a35f09fa09e597942094bbcc",
+          "libx11_1.8.14.orig.tar.gz": "ebb8a58549ddde50aa2e742b3b256557f451053d173be8dbfc2e8ac078eee1d6",
+          "libx11_1.8.14-1.diff.gz": "d8a820cabaceedcdf0d74318133eab8d3f4bc69d1f7b08f8a8af1eab94cb77c2"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz",
+        "upstream": {
+          "directory": "libX11-1.8.14",
+          "version": "1.8.14",
+          "url": "https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.14.tar.xz",
+          "sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950"
+        },
+        "binary_version": "2:1.8.14-1+container1"
+      },
+      "libxi": {
+        "version": "2:1.8.4-1",
+        "files": {
+          "libxi_1.8.4-1.dsc": "82025749283a2231866439499d86655c82f8154ae26d8b20ce1c18fe034f596f",
+          "libxi_1.8.4.orig.tar.xz": "ddd6057b89a91903bc2f884d55c8467440906945e482c36547260dff28661afc",
+          "libxi_1.8.4-1.debian.tar.xz": "9720c170c270c313be1c4422cc2ac8a1eb5872dbf943603a7f012a64f2bf1bff"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+      },
+      "libxrender": {
+        "version": "1:0.9.13-1",
+        "files": {
+          "libxrender_0.9.13-1.dsc": "d1e0fa2d03ac3402e449e73bdee3a75be391634ab3cb0e5a44dd69701b8fdf0a",
+          "libxrender_0.9.13.orig.tar.gz": "bf264b683d1e49ff9a6bc03af13baa430a556d943731a2b1ac2439dae4fea205",
+          "libxrender_0.9.13-1.diff.gz": "8272e0d966bb7c7c9d8d0a0dd70e9258bded5833ea675b2783d5c698d9b4eb8d"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz",
+        "upstream": {
+          "directory": "libXrender-0.9.13",
+          "version": "0.9.13",
+          "url": "https://xorg.freedesktop.org/archive/individual/lib/libXrender-0.9.13.tar.xz",
+          "sha256": "3fe88c609df6782e1e7af2e4de36b2563d70cd70ff7dcb1cda561ad64912bb64"
+        },
+        "binary_version": "1:0.9.13-1+container1"
+      },
+      "libxtst": {
+        "version": "2:1.2.6-1",
+        "files": {
+          "libxtst_1.2.6-1.dsc": "b64d8bf301c32091c8a34ef2d8c6c42b133948d892efa66567d66003ca6da807",
+          "libxtst_1.2.6.orig.tar.gz": "f30f2d4f8370077de9f35220a539bf34c042ca02a55669a4d8f345c661ce7839",
+          "libxtst_1.2.6-1.diff.gz": "e9e503da30bb53c5f533e697a6bbfed2d0e9f2226f503e37e21ffdb5de099f99"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz",
+        "upstream": {
+          "directory": "libXtst-1.2.6",
+          "version": "1.2.6",
+          "url": "https://xorg.freedesktop.org/archive/individual/lib/libXtst-1.2.6.tar.xz",
+          "sha256": "f94f0b37c07d80d877f3eda2c2405cc7e62aa9842f6310354aa349e3d66a4fe5"
+        },
+        "binary_version": "2:1.2.6-1+container1"
+      },
+      "ncurses": {
+        "version": "6.6+20260608-2",
+        "files": {
+          "ncurses_6.6+20260608-2.dsc": "d12b31c11fad1c5baf42e36d643edd72cecacec67c2d14e759da42a61759582a",
+          "ncurses_6.6+20260608.orig.tar.gz": "3b91eb714ba61b9ebfcfe09cf8e7c1c45cf2e8a6282f5887fb942db514ae93bd",
+          "ncurses_6.6+20260608.orig.tar.gz.asc": "46de216bd447b5855b7df45d3da5a85f382aa1fea778180459049b2d6ee3c9b9",
+          "ncurses_6.6+20260608-2.debian.tar.xz": "52a49c453121bd90d21edef53903beac9d9d8229e0ef4f49d3b0252e49932f4c"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+      },
+      "perl": {
+        "version": "5.42.3-1",
+        "files": {
+          "perl_5.42.3-1.dsc": "36535968b24b1f73ce1cf980208017dbe4a38bff5b501cd752e82139206282f7",
+          "perl_5.42.3.orig-regen-configure.tar.xz": "5ae2aea5bc800c05324e4c9b166391b17368d10300c036fbe45f8c23a799c355",
+          "perl_5.42.3.orig.tar.xz": "c9387e1473a1866935cb047ece7c2e0a80767a3acdecb79d4a375f8a95970ddc",
+          "perl_5.42.3-1.debian.tar.xz": "0b5692654b3efe8be7e469be851ac8abf6a425bba7c2be5a29a0d553a450956f"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+      },
+      "sqlite3": {
+        "version": "3.54.1-2",
+        "files": {
+          "sqlite3_3.54.1-2.dsc": "4112cab5cabf3892c5ad01bf0768e7784ea204afe2249e564d30d994979443ef",
+          "sqlite3_3.54.1.orig-www.tar.xz": "67906ee141109bebe43cdcf197892806397dabc79f5cd7f05f1278f47b0c5e25",
+          "sqlite3_3.54.1.orig.tar.xz": "faeff7682200b3dd58c8f0f229892a7271c73c1fdabc86e7315eb31eb7cb6e83",
+          "sqlite3_3.54.1-2.debian.tar.xz": "ec8e9bb58db16bd661c6f44426855536831f3a004ac1aa8292d24db2ac504999"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz",
+        "binary_version": "3.54.1-2+container1",
+        "build_tcl": "9.0"
+      },
+      "systemd": {
+        "version": "262.2-1",
+        "files": {
+          "systemd_262.2-1.dsc": "dbdf4c8a2592662c9505b0e0fa0364ed0391c0b0c3892098fbbf6b89212942c1",
+          "systemd_262.2.orig.tar.gz": "116432ee9dce9bfef4c7da7963c6de41899ab44197f2876ee99545707a5c7c1f",
+          "systemd_262.2-1.debian.tar.xz": "035551c3588266eb9c14100d7086d7be428fdef393b88c015f4a0c4ec6eb20dc"
+        },
+        "index": "https://deb.debian.org/debian/dists/sid/main/source/Sources.xz"
+      }
+    },
+    "chromium": {
+      "version": "157.0.8103.38",
+      "url": "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.38/linux64/chrome-headless-shell-linux64.zip",
+      "sha256": "deafffa74660b34853a4119c361fd427ac8c9fcb62db51ddb8a797cd83a4ba2d"
+    },
+    "pyexpat_sources": {
+      "pyexpat.c": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.14.10/Modules/pyexpat.c",
+        "sha256": "5dce9968d7627c4052b9f2d57175413e8a15d43dec07c7620b9a14b0415c1283"
+      },
+      "_elementtree.c": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.14.10/Modules/_elementtree.c",
+        "sha256": "8c21a8ca196995e690f4786c10b643c6ce8709ddfda49d1065350d4efcbc79bb"
+      },
+      "clinic/_elementtree.c.h": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.14.10/Modules/clinic/_elementtree.c.h",
+        "sha256": "11827e0153956e5b59da58dfecceaaeeee256bedb685fb36795358c03784f91c"
+      },
+      "clinic/pyexpat.c.h": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.14.10/Modules/clinic/pyexpat.c.h",
+        "sha256": "f31d4b184495a851d8ef66e221fb7ff07a830b3ebaf73bbe44155ec40ddc7de5"
+      },
+      "expat_config.h": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.14.10/Modules/expat/expat_config.h",
+        "sha256": "fc918070c65fa23613e4ba5a44b3407e5eb2a503ec42fbfeebee19d9e5eb5649"
+      },
+      "pyexpat.h": {
+        "url": "https://raw.githubusercontent.com/python/cpython/v3.14.10/Include/pyexpat.h",
+        "sha256": "d3564a35c027eb7a0e4ddbf8659769bf4be61b0c39666c79c555249fa8b0d099"
+      }
+    }
+  },
+  "verification_inputs": {
+    "trivy_image": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "grype_image": "anchore/grype:v0.121.2@sha256:6a36234da13f9faa327306ac0b3dab3405cfa2b4eb20c8f904125a8707863913",
+    "mariadb_image": "mariadb:11.8@sha256:c4124d1afa875e47f2892edf26b482fa54f796e2f342d3717a04ca091a22a9bd",
+    "redis_image": "redis:8-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80"
+  },
+  "security": {
+    "status": "pending"
+  }
+}

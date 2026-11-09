@@ -24,14 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  base:
-    uses: ./.github/workflows/base-image.yaml
-    permissions:
-      contents: read
-      packages: write
-
   verify:
-    needs: base
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
@@ -49,12 +42,13 @@ jobs:
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
           bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
-      - name: Download matching resolved inputs and base digests
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: resolved-inputs
-          path: .build
-          digest-mismatch: error
+      - name: Resolve apps against the approved ready base
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build
+          python scripts/resolve.py 2>&1 | tee .build/resolve.log
       - name: Authenticate base image pulls
         env:
           GHCR_TOKEN: ${{ github.token }}

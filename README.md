@@ -1,6 +1,6 @@
 # Community ERPNext container
 
-Builds `ghcr.io/modulairy/erpnext:<ERPNext-release-tag>` from public upstream sources. GitHub Actions starts **only manually**. The application workflow calls the reusable base-image workflow; no push, PR, release or scheduled triggers are configured.
+Builds `ghcr.io/modulairy/erpnext:<ERPNext-release-tag>` from public upstream sources. GitHub Actions starts **only manually**. Base creation is a separate manual workflow. Application workflows only consume approved immutable base images; no push, PR, release or scheduled triggers are configured.
 
 ## Applications and versions
 
@@ -41,7 +41,7 @@ After a successful push and provenance/SBOM attestations, the publish job create
 
 ## Frappe framework image
 
-**Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the same cached base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
+**Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the approved ready base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
 
 The runtime uses a version/hash-pinned official Chrome for Testing headless shell. A separate pinned Grype product scan must detect a known affected Chrome control and find no high/critical issues in the selected release. Raw results are retained. Reviewed Debian source fixes pass only when the official fixed version, locked source hashes, installed package version and package integrity agree; unmatched findings remain blocking. Python's pyexpat and ElementTree modules are rebuilt from the exact CPython source against the reviewed Expat and verified in the installed image.
 
@@ -49,11 +49,11 @@ The runtime uses a version/hash-pinned official Chrome for Testing headless shel
 
 `Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Both stop before Bench installation. Runtime contains Python, Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder adds npm/Yarn, compilers and development libraries; these tools do not enter the final application image.
 
-**Actions > ERPNext base images > Run workflow** on `main` builds missing images. The application workflow performs the same preparation automatically, then installs Bench and the applications on these bases. The input hash covers the base Containerfile, OS backport script and selected Python/Node/Yarn/OS package inputs. App releases, Bench, application patches and resolution timestamps do not cause OS recompilation. Matching images are reused from GHCR and their exact digests are written to `base-images.json` and the final image lock.
+**Actions > ERPNext base images > Run workflow** on `main` is the only way to create or rebuild the base. Leave `rebuild` disabled to verify and select the exact ready digests already recorded in the manifest, with no runtime resolution or compilation; enable it explicitly to resolve new runtime inputs and rebuild. Both base images must pass native smoke checks and the same HIGH/CRITICAL security gate, approved exact exceptions and verified-source rules used by applications. Raw reports are retained.
 
-Select `rebuild` in the base workflow to refresh OS repository packages even when the input hash is unchanged. This refreshes the matching base tags; every application run still locks the resulting digests. Without an input change or explicit rebuild, apt repositories are not queried again. The first base build retains the existing source-compilation cost; subsequent application builds skip it.
+After successful verification, the manual base workflow updates only `resources/base-images.json` on `main` with the immutable runtime/builder digests, locked runtime inputs and verification evidence. A concurrent main update stops manifest publication instead of overwriting work.
 
-Base publication validates the dependency/tool boundary; it is not a successful application security assessment. The existing full application integration and security gates still determine whether an ERPNext image can be published. Base registry permissions or network failures stop preparation rather than triggering a hidden full rebuild.
+Frappe and ERPNext runs read this manifest directly. They never call the base workflow, compare base source hashes or rebuild a base. Python, Node, Yarn and OS inputs come from the selected base; Bench and application sources are resolved against those versions. A missing approved manifest or incompatible runtime stops the application run and requires a manual base update. Re-running an application cannot update the selected base.
 
 ## Reviewed Frappe 16 backports
 

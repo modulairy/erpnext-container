@@ -27,9 +27,7 @@ def load():
 
 
 
-BASE_IMAGE = 'ghcr.io/modulairy/erpnext-base'
-BASE_FIELDS = ('python', 'node', 'python_image', 'node_image', 'yarn',
-               'mariadb_client', 'curl_backport', 'os_backports', 'chromium', 'pyexpat_sources')
+from base_manifest import BASE_IMAGE, BASE_FIELDS
 
 
 def base_key(lock):
@@ -105,16 +103,11 @@ def base():
                 raise RuntimeError('Published base manifest is missing')
             rebuilt.append(kind)
         images[kind] = BASE_IMAGE+'@'+digest
-        # These images stop before Bench, and compilers belong only to the builder.
-        check = ("import importlib.util,shutil; from pathlib import Path; "
-                 "assert importlib.util.find_spec('bench') is None; "
-                 "assert Path('/opt/os-backports/provenance.json').is_file(); "
-                 "assert shutil.which('node'); assert shutil.which('chromium-headless-shell'); ")
-        check += ("assert all(shutil.which(x) for x in ('gcc','npm','yarn'))"
-                  if kind == 'builder' else
-                  "assert not any(shutil.which(x) for x in ('gcc','npm','yarn'))")
-        run(['docker', 'run', '--rm', '--entrypoint', 'python', images[kind], '-c', check])
-    data = {'schema': 1, 'key': key, 'images': images, 'rebuilt': rebuilt}
+        smoke_base(images[kind], kind)
+
+    data = {'schema': 2, 'key': key, 'images': images, 'rebuilt': rebuilt,
+            'inputs': {name: lock[name] for name in BASE_FIELDS},
+            'verification_inputs': {name: lock[name] for name in ('trivy_image', 'grype_image', 'mariadb_image', 'redis_image')}}
     (OUT/'base-images.json').write_text(json.dumps(data, indent=2)+'\n')
     summary = f"Base images: {key}; rebuilt: {', '.join(rebuilt) or 'none (GHCR reuse)'}.\n"
     summary += '\n'.join(f'{kind}: {ref}' for kind, ref in images.items())+'\n'
@@ -129,15 +122,11 @@ def base():
 
 
 def locked_base_images(lock):
-    metadata = json.loads((OUT/'base-images.json').read_text())
-    if metadata.get('schema') != 1 or metadata.get('key') != base_key(lock):
-        raise ValueError('Base image inputs changed; run the base image workflow')
-    images = metadata['images']
-    for kind in ('runtime', 'builder'):
-        if not re.fullmatch(re.escape(BASE_IMAGE)+r'@sha256:[0-9a-f]{64}', images[kind]):
-            raise ValueError('Base image must use the approved GHCR package and a digest')
-    return images
-
+    from base_manifest import validate
+    metadata = validate(json.loads((OUT/'base-images.json').read_text()))
+    if any(lock.get(name) != value for name, value in metadata['inputs'].items()):
+        raise ValueError('Application lock must use the selected base runtime inputs')
+    return metadata['images']
 
 
 def select_profile(lock, profile):
@@ -176,12 +165,19 @@ def build():
                                         '/home/frappe/frappe-bench/image-lock.json'])
     (OUT/'image-lock.json').write_bytes(inventory)
     inventory = json.loads(inventory)
-    query = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'dpkg-query', IMAGE,
+    capture_installed(IMAGE, inventory, lock)
+    image_id = subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip()
+    (OUT/'image-id.txt').write_text(image_id)
+    run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
+
+
+def capture_installed(image, inventory, lock):
+    query = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'dpkg-query', image,
                                      '-W', '-f=${Package}\\t${Version}\\n'], text=True)
     versions = dict(line.split('\t', 1) for line in query.splitlines())
     packages = sorted({name for proof in inventory['os_backport_provenance'].values()
                        for name in proof['binaries']})
-    integrity = subprocess.run(['docker', 'run', '--rm', '--entrypoint', 'dpkg', IMAGE,
+    integrity = subprocess.run(['docker', 'run', '--rm', '--entrypoint', 'dpkg', image,
                                 '--verify', *packages], capture_output=True, text=True)
     if integrity.returncode or integrity.stdout.strip():
         raise ValueError('Installed backport package integrity check failed: '+integrity.stdout)
@@ -191,7 +187,7 @@ def build():
                  "name:hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() "
                  "for name,module in [('pyexpat',pyexpat),('_elementtree',_elementtree)]}}))")
     xml = json.loads(subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'python',
-                                             IMAGE, '-c', xml_check], text=True))
+                                             image, '-c', xml_check], text=True))
     proof = inventory['python_expat_provenance']
     if (proof['sources'] != lock['pyexpat_sources'] or proof['tests_passed'] is not True
             or xml['version'] != proof['expat_version']
@@ -199,9 +195,6 @@ def build():
         raise ValueError('Installed Python XML modules differ from verified build provenance')
     (OUT/'installed-packages.json').write_text(json.dumps(
         {'versions': versions, 'verified_packages': packages, 'python_xml': xml}, indent=2)+'\n')
-    image_id = subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip()
-    (OUT/'image-id.txt').write_text(image_id)
-    run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
 
 
 def integration():
@@ -307,6 +300,74 @@ def scan_chromium(lock, cache):
         raise ValueError('Chrome CPE scan coverage control failed')
     return {'accepted': [], 'blocking': reports['chromium'], 'advisory': [], 'verified_fixed': []}
 
+def smoke_base(image, kind):
+    # These images stop before Bench, and compilers belong only to the builder.
+    check = ("import importlib.util,shutil; from pathlib import Path; "
+             "assert importlib.util.find_spec('bench') is None; "
+             "assert Path('/opt/os-backports/provenance.json').is_file(); "
+             "assert shutil.which('node'); assert shutil.which('chromium-headless-shell'); ")
+    check += ("assert all(shutil.which(x) for x in ('gcc','npm','yarn'))"
+              if kind == 'builder' else
+              "assert not any(shutil.which(x) for x in ('gcc','npm','yarn'))")
+    run(['docker', 'run', '--rm', '--entrypoint', 'python', image, '-c', check])
+
+
+def prepare_base():
+    from base_manifest import MANIFEST, validate
+    metadata = validate(json.loads((ROOT/MANIFEST).read_text()), require_verified=False)
+    lock = {**metadata['inputs'], **metadata['verification_inputs']}
+    OUT.mkdir(exist_ok=True)
+    (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
+    # Exact selected digests only. No resolver, source comparison or builder call.
+    (OUT/'base-images.json').write_text(json.dumps(metadata, indent=2)+'\n')
+
+
+def scan_base():
+    global OUT
+    from base_manifest import validate, policy_hash
+    root = OUT
+    lock = load()
+    metadata = validate(json.loads((OUT/'base-images.json').read_text()), require_verified=False)
+    cache = 'base-scan-'+secrets.token_hex(4)
+    run(['docker', 'volume', 'create', cache])
+    reports, failed = {}, []
+    try:
+        for kind in ('runtime', 'builder'):
+            image = metadata['images'][kind]
+            OUT = root/(kind+'-reports')
+            OUT.mkdir(exist_ok=True)
+            (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
+            inventory = dict(metadata['inputs'])
+            for key, path in (('os_backport_provenance', '/opt/os-backports/provenance.json'),
+                              ('python_expat_provenance', '/opt/os-backports/pyexpat/provenance.json')):
+                inventory[key] = json.loads(subprocess.check_output(
+                    ['docker', 'run', '--rm', '--entrypoint', 'cat', image, path]))
+            (OUT/'image-lock.json').write_text(json.dumps(inventory, indent=2)+'\n')
+            smoke_base(image, kind)
+            capture_installed(image, inventory, lock)
+            run(['docker', 'run', '--rm', '--entrypoint', 'python',
+                 '-v', f'{ROOT}/tests/os_test.py:/tmp/os_test.py:ro', image, '/tmp/os_test.py'])
+            run(['docker', 'save', '--output', str(OUT/'image.tar'), image])
+            try:
+                scan_with_cache(cache)
+            except RuntimeError:
+                failed.append(kind)
+            reports[kind] = hashlib.sha256((OUT/'gate-security.json').read_bytes()).hexdigest()
+            (OUT/'image.tar').unlink()
+    finally:
+        OUT = root
+        run(['docker', 'volume', 'rm', cache])
+    if failed:
+        raise RuntimeError('Base security gate failed: '+', '.join(failed))
+    metadata['security'] = {'status': 'passed', 'severity': ['HIGH', 'CRITICAL'],
+                            'policy_sha256': policy_hash(), 'reports': reports,
+                            'trivy_image': lock['trivy_image'], 'grype_image': lock['grype_image']}
+    metadata['source_revision'] = os.environ['GITHUB_SHA']
+    metadata['evidence'] = ('https://github.com/'+os.environ['GITHUB_REPOSITORY']+
+                            '/actions/runs/'+os.environ['GITHUB_RUN_ID'])
+    (OUT/'base-images.json').write_text(json.dumps(metadata, indent=2)+'\n')
+
+
 def scan():
     cache = 'erpnext-scan-'+secrets.token_hex(4)
     run(['docker', 'volume', 'create', cache])
@@ -410,4 +471,4 @@ def scan_with_cache(cache):
 
 if __name__ == '__main__':
     os.chdir(ROOT)
-    {'config': config, 'base': base, 'build': build, 'integration': integration, 'scan': scan}[sys.argv[1]]()
+    {'config': config, 'base': base, 'build': build, 'integration': integration, 'scan': scan, 'scan-base': scan_base, 'prepare-base': prepare_base}[sys.argv[1]]()
