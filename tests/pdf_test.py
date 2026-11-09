@@ -82,7 +82,16 @@ def verify_pdf(session, base):
     (folder/'invoice.html').write_text(frappe.get_print('Sales Invoice', invoice.name, 'Standard', no_letterhead=1))
     response = session.post(base+'/api/method/frappe.utils.print_format.download_pdf',
         data={'doctype': 'Sales Invoice', 'name': invoice.name, 'format': 'Standard', 'no_letterhead': 1}, timeout=100)
-    response.raise_for_status()
+    if response.status_code >= 400:
+        try:
+            error = response.json()
+        except ValueError:
+            error = {}
+        detail = str(error.get('exception', '')).splitlines()[0][:240]
+        raise AssertionError(
+            f"Authenticated Sales Invoice PDF endpoint returned HTTP {response.status_code} "
+            f"({error.get('exc_type', 'unknown')}: {detail})"
+        )
     assert response.content.startswith(b'%PDF-'), response.text[:500]
     (folder/'invoice.pdf').write_bytes(response.content)
     reader = PdfReader(io.BytesIO(response.content))

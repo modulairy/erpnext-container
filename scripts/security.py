@@ -36,6 +36,8 @@ def overlay(root, overrides):
     for manifest in root.rglob('package.json'):
         if '.git' in manifest.parts or 'node_modules' in manifest.parts:
             continue
+        if 'templates' in manifest.relative_to(root).parts:
+            continue
         data = json.loads(manifest.read_text())
         yarn_lock = manifest.parent/'yarn.lock'
         locked = yarn_lock.read_text() if yarn_lock.exists() else ''

@@ -69,7 +69,9 @@ def pages(path):
         if not isinstance(data, list):
             raise ValueError(f'Expected list: {path}')
         yield from data
-        if len(data) < 100:
+        # GitHub's releases endpoint exposes at most the first 1000 results.
+        # Rows are newest-first, which is the only range used for candidate selection.
+        if len(data) < 100 or page >= 10:
             break
         page += 1
 
@@ -275,8 +277,8 @@ def os_backports():
     url = 'https://deb.debian.org/debian/dists/sid/main/source/Sources.xz'
     index = lzma.decompress(request(url)).decode()
     reviewed = {'acl': '2.4.0-1', 'ncurses': '6.6+20260608-2',
-                'perl': '5.42.3-1', 'systemd': '262.1-1', 'libsndfile': '1.2.2-4',
-                'libx11': '2:1.8.13-1', 'libxrender': '1:0.9.12-1', 'libxtst': '2:1.2.5-1'}
+                'perl': '5.42.3-1', 'systemd': '262.2-1', 'libsndfile': '1.2.2-4',
+                'libx11': '2:1.8.14-1', 'libxrender': '1:0.9.13-1', 'libxtst': '2:1.2.6-1'}
     result = {}
     for paragraph in index.split('\n\n'):
         fields = {}
@@ -310,8 +312,8 @@ def os_backports():
         result[name]['upstream'] = {'directory': directory, 'version': version,
             'url': 'https://xorg.freedesktop.org/archive/individual/lib/'+directory+'.tar.xz',
             'sha256': digest}
-        epoch = reviewed[name].split(':')[0]+':'
-        result[name]['binary_version'] = epoch+version+'-0+container1'
+        # Stay newer than the exact reviewed Debian source revision we rebuild.
+        result[name]['binary_version'] = reviewed[name] + '+container1'
     result['libsndfile'].update(binary_version='1.2.2-4+container1', patch={
         'url': 'https://github.com/libsndfile/libsndfile/commit/cdadf9a65fdc1f28da9d235eb443d5f5e57010d2.patch',
         'sha256': '19828cfdc17b80f13c8d1fcc8b828ea5c328071d91171c6d80f94a2e1499b719'})

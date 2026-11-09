@@ -18,15 +18,15 @@ class CommunityTests(unittest.TestCase):
 
     def test_reviewed_patch_hashes_and_retry_contract(self):
         root = Path(__file__).resolve().parents[1]/'patches'
-        entries = selected_patches([{'name':'frappe','version':'16.53.0'},
-                                   {'name':'helpdesk','version':'1.31.0'}], root)
+        entries = selected_patches([{'name':'frappe','version':'16.55.2'},
+                                   {'name':'helpdesk','version':'16.1.0'}], root)
         self.assertEqual(entries['helpdesk']['sha256'], hashlib.sha256((root/'helpdesk.patch').read_bytes()).hexdigest())
         self.assertNotIn('rq_retry=Retry', (root/'helpdesk.patch').read_text())
         with tempfile.TemporaryDirectory() as directory:
             app = Path(directory)
             with patch('community_overlay.policy', return_value=(root, entries)):
                 with self.assertRaisesRegex(ValueError, 'changed upstream'):
-                    apply_community(app, {'name':'frappe','version':'16.53.0'}, entries)
+                    apply_community(app, {'name':'frappe','version':'16.55.2'}, entries)
 
 
 class ReleaseTests(unittest.TestCase):
