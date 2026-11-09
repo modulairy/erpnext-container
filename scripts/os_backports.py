@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import tarfile
+import time
+import urllib.error
 from datetime import datetime
 from email.utils import format_datetime
 from urllib.request import urlopen
@@ -16,8 +18,15 @@ def run(*args, **kwargs):
 
 
 def download(item, target):
-    with urlopen(item['url'], timeout=90) as response:
-        data = response.read()
+    for attempt in range(3):
+        try:
+            with urlopen(item['url'], timeout=90) as response:
+                data = response.read()
+            break
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as error:
+            if (isinstance(error, urllib.error.HTTPError) and error.code not in (429, 500, 502, 503, 504)) or attempt == 2:
+                raise
+            time.sleep(2 ** (attempt + 1))
     if hashlib.sha256(data).hexdigest() != item['sha256']:
         raise ValueError('Upstream input checksum mismatch')
     target.write_bytes(data)
