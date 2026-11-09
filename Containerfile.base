@@ -35,6 +35,7 @@ RUN python -c 'import hashlib,json,re,subprocess; from pathlib import Path; p=js
 RUN python -c 'import json,re,subprocess; from pathlib import Path; v=json.load(open("/opt/build/lock.json"))["curl_backport"]; assert re.fullmatch(r"\d+\.\d+\.\d+-\d+~bpo13\+\d+(?:\+b\d+)?",v); Path("/etc/apt/sources.list.d/backports.list").write_text("deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] https://deb.debian.org/debian trixie-backports main\n"); subprocess.run(["apt-get","update"],check=True); subprocess.run(["apt-get","install","-y","--no-install-recommends","-t","trixie-backports"]+[name+"="+v for name in ("curl","libcurl3t64-gnutls","libcurl4-gnutls","libcurl4t64")],check=True)' \
     && rm -rf /var/lib/apt/lists/*
 
+USER frappe
 LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-container"
 FROM runtime-base AS builder-base
 USER root
@@ -51,3 +52,4 @@ RUN apt-get update \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; subprocess.run(["apt-get","install","-y","--no-install-recommends","libmariadb-dev="+p["version"]],check=True)' \
     && rm -rf /var/lib/apt/lists/* /opt/os-build-deps
+USER frappe

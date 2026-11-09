@@ -62,6 +62,7 @@ jobs:
             .build/mariadb-keyring.asc
             .build/redis.lua
             .build/base-images.json
+            .build/base-config.json
             .build/base/
             .build/resolve.log
           retention-days: 14

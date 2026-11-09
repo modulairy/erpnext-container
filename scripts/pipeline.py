@@ -52,6 +52,18 @@ def registry_digest(tag):
     return digest
 
 
+
+def config():
+    lock = load()
+    report = OUT/'base-config.json'
+    report.unlink(missing_ok=True)
+    run(['docker', 'run', '--rm', '-v', f'{OUT}:/scan', '-v', f'{ROOT}:/source:ro',
+         lock['trivy_image'], 'fs', '--scanners', 'misconfig,secret',
+         '--severity', 'HIGH,CRITICAL', '--exit-code', '1',
+         '--skip-dirs', '/source/.git,/source/.build', '--format', 'json',
+         '--output', '/scan/base-config.json', '/source'])
+
+
 def base():
     lock = load()
     key = base_key(lock)
@@ -282,4 +294,4 @@ def scan_with_cache(cache):
 
 if __name__ == '__main__':
     os.chdir(ROOT)
-    {'base': base, 'build': build, 'integration': integration, 'scan': scan}[sys.argv[1]]()
+    {'config': config, 'base': base, 'build': build, 'integration': integration, 'scan': scan}[sys.argv[1]]()

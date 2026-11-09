@@ -2,6 +2,7 @@
 ARG RUNTIME_BASE_IMAGE
 ARG BUILDER_BASE_IMAGE
 FROM ${RUNTIME_BASE_IMAGE} AS base
+USER root
 ARG BENCH_VERSION
 COPY --from=resolved lock.json /opt/build/lock.json
 RUN pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \
@@ -14,6 +15,7 @@ COPY --from=resolved redis.lua /usr/local/share/lua/5.1/resty/redis.lua
 RUN python -c 'import hashlib,json; from pathlib import Path; assert hashlib.sha256(Path("/usr/local/share/lua/5.1/resty/redis.lua").read_bytes()).hexdigest() == json.load(open("/opt/build/lock.json"))["redis_lua"]["sha256"]'
 COPY resources/nginx-template.conf /templates/nginx/frappe.conf.template
 FROM ${BUILDER_BASE_IMAGE} AS dependencies
+USER root
 ARG BENCH_VERSION
 COPY --from=resolved lock.json /opt/build/lock.json
 RUN pip install --no-cache-dir "frappe-bench==${BENCH_VERSION}" \

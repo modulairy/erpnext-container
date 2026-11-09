@@ -21,6 +21,7 @@ fi
 out="${BUILD_DIR:-.build}"
 mkdir -p "$out"
 "$python_bin" scripts/resolve.py 2>&1 | tee "$out/resolve.log"
+"$python_bin" scripts/pipeline.py config
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 trap 'docker logout ghcr.io' EXIT
 args=()
