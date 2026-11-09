@@ -19,7 +19,7 @@ RUN useradd -m -u 1000 -s /bin/bash frappe \
     && apt-get install -y --no-install-recommends ca-certificates curl git nginx gettext-base \
        libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
        mariadb-client libmariadb3 libpq5 libmagic1 media-types tzdata-legacy \
-       chromium-headless-shell fonts-dejavu-core libnginx-mod-http-lua libnginx-mod-http-srcache-filter lua-cjson \
+       chromium-headless-shell libatk-bridge2.0-0 fonts-dejavu-core libnginx-mod-http-lua libnginx-mod-http-srcache-filter lua-cjson \
     && apt-get install -y --no-remove --no-install-recommends /opt/os-backports/*.deb \
     && apt-get purge -y chromium-headless-shell chromium-common \
     && dpkg --purge libperl5.40 perl-modules-5.40 \
