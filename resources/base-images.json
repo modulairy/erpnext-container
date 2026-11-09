@@ -190,5 +190,17 @@
   },
   "security": {
     "status": "pending"
+  },
+  "bootstrap": {
+    "pip": {
+      "version": "26.3",
+      "url": "https://files.pythonhosted.org/packages/07/25/ee8c38ae72d66b844ce8eb9711ba905dba21ca1a8a0c960057c41cd23337/pip-26.3-py3-none-any.whl",
+      "sha256": "f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13"
+    },
+    "npm": {
+      "version": "11.21.2",
+      "url": "https://registry.npmjs.org/npm/-/npm-11.21.2.tgz",
+      "integrity": "sha512-7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A=="
+    }
   }
 }

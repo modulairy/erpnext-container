@@ -15,7 +15,7 @@ MANIFEST = 'resources/base-images.json'
 
 def policy_hash(root=ROOT):
     files = {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
-             for name in ('security-exceptions.json', 'security-remediations.json')}
+             for name in ('security-exceptions.json', 'security-remediations.json', 'security-builder-advisories.json')}
     return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
 
@@ -27,6 +27,8 @@ def validate(data, require_verified=True):
             raise ValueError('Approved base references must be immutable GHCR digests')
     if set(data.get('inputs', {})) != set(BASE_FIELDS):
         raise ValueError('Missing locked base runtime inputs')
+    if not isinstance(data.get('bootstrap'), dict):
+        raise ValueError('Missing reviewed bootstrap tooling lock')
     if require_verified:
         security = data.get('security', {})
         if (security.get('status') != 'passed' or security.get('severity') != ['HIGH', 'CRITICAL']

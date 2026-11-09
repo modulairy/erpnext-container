@@ -80,3 +80,14 @@ class VerifiedSourceFixTests(unittest.TestCase):
         self.assertEqual(len(self.verify()), 1)
         self.installed['python_xml']['binaries']['_elementtree'] = 'e'*64
         self.assertEqual(self.verify(), [])
+
+    def test_builder_development_package_requires_its_own_binary_proof_and_integrity(self):
+        proof = self.lock['os_backport_provenance']['libxi']
+        proof['build_only_binaries'] = {'libxi-dev': {'version': self.version, 'sha256': 'c'*64}}
+        self.report['Results'][0]['Vulnerabilities'][0]['PkgName'] = 'libxi-dev'
+        self.installed['versions']['libxi-dev'] = self.version
+        self.assertEqual(self.verify(), [])
+        self.installed['verified_packages'].append('libxi-dev')
+        self.assertEqual(len(self.verify()), 1)
+        proof['build_only_binaries']['libxi-dev']['version'] = 'older'
+        self.assertEqual(self.verify(), [])

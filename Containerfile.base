@@ -40,6 +40,8 @@ RUN python -c 'import json,shutil,sysconfig; from pathlib import Path; p=json.lo
     && python -c 'import pyexpat,xml.etree.ElementTree as e; assert tuple(map(int,pyexpat.EXPAT_VERSION.split("_")[-1].split("."))) >= (2,10,0); assert e.fromstring("<root>ok</root>").text == "ok"'
 COPY scripts/chromium.py /opt/build/chromium.py
 RUN python /opt/build/chromium.py
+COPY scripts/bootstrap.py resources/bootstrap.json /opt/bootstrap/
+RUN python /opt/bootstrap/bootstrap.py runtime
 USER frappe
 LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-container"
 FROM runtime-base AS builder-base
@@ -57,4 +59,5 @@ RUN apt-get update \
        libwebp-dev libbz2-dev libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
     && python -c 'import json,subprocess; p=json.load(open("/opt/build/lock.json"))["mariadb_client"]; subprocess.run(["apt-get","install","-y","--no-install-recommends","libmariadb-dev="+p["version"]],check=True)' \
     && rm -rf /var/lib/apt/lists/* /opt/os-build-deps
+RUN python /opt/bootstrap/bootstrap.py builder
 USER frappe

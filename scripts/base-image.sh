@@ -22,15 +22,20 @@ out="${BUILD_DIR:-.build}"
 mkdir -p "$out"
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 trap 'docker logout ghcr.io' EXIT
-case "${BASE_REBUILD:-false}" in
-    true)
+case "${BASE_REBUILD:-false}:${BASE_REFRESH:-false}" in
+    true:false)
         BASE_BUILD=true "$python_bin" scripts/resolve.py 2>&1 | tee "$out/resolve.log"
         "$python_bin" scripts/pipeline.py config
         "$python_bin" scripts/pipeline.py base --rebuild
         ;;
-    false)
+    false:true)
+        "$python_bin" scripts/pipeline.py prepare-base
+        "$python_bin" scripts/pipeline.py config
+        "$python_bin" scripts/pipeline.py refresh-base
+        ;;
+    false:false)
         "$python_bin" scripts/pipeline.py prepare-base
         "$python_bin" scripts/pipeline.py config
         ;;
-    *) printf '%s\n' 'BASE_REBUILD must be true or false.' >&2; exit 1 ;;
+    *) printf '%s\n' 'Choose only one manual rebuild or bootstrap refresh operation.' >&2; exit 1 ;;
 esac

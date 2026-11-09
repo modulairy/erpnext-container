@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+USER root
+ARG BOOTSTRAP_KIND
+COPY scripts/bootstrap.py resources/bootstrap.json /opt/bootstrap/
+RUN python /opt/bootstrap/bootstrap.py "${BOOTSTRAP_KIND}"
+USER frappe
+LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-container"

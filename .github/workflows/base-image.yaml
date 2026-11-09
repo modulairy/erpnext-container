@@ -8,6 +8,11 @@ on:
         type: boolean
         default: false
         required: true
+      refresh_bootstrap:
+        description: 'Refresh pip/npm on selected ready images without OS compilation'
+        type: boolean
+        default: false
+        required: true
 
 permissions:
   contents: read
@@ -45,6 +50,7 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
           GHCR_USER: ${{ github.actor }}
           BASE_REBUILD: ${{ inputs.rebuild }}
+          BASE_REFRESH: ${{ inputs.refresh_bootstrap }}
         run: bash scripts/base-image.sh
       - name: Verify base images with the shared security gate
         run: python scripts/pipeline.py scan-base

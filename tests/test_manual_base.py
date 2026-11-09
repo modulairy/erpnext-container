@@ -13,7 +13,8 @@ import pipeline
 
 
 def approved():
-    return {'schema': 2, 'images': {kind: base_manifest.BASE_IMAGE+'@sha256:'+'a'*64
+    return {'schema': 2, 'bootstrap': {},
+            'verification_inputs': {k: 'locked' for k in ('trivy_image','grype_image','mariadb_image','redis_image')}, 'images': {kind: base_manifest.BASE_IMAGE+'@sha256:'+'a'*64
                                     for kind in ('runtime', 'builder')},
             'inputs': {**{name: name+'-locked' for name in base_manifest.BASE_FIELDS},
                        'python': '3.14.10', 'node': '24.22.2'},
@@ -31,7 +32,7 @@ class ManualBaseTests(unittest.TestCase):
              patch.object(resolve, 'request', side_effect=AssertionError('No base discovery permitted')), \
              patch.object(resolve, 'image_digest', side_effect=AssertionError('No base registry lookup permitted')):
             inputs, trivy, grype = resolve.runtime_inputs(rows, Path(directory), False)
-            self.assertEqual(inputs, data['inputs'])
+            self.assertEqual(inputs, {**data['inputs'], 'bootstrap': data['bootstrap']})
             self.assertEqual(trivy, data['security']['trivy_image'])
             self.assertEqual(grype, data['security']['grype_image'])
             self.assertEqual(json.loads((Path(directory)/'base-images.json').read_text()), data)

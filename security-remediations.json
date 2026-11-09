@@ -79,5 +79,14 @@
       "fixed_version": "2:1.2.6-1",
       "url": "https://security-tracker.debian.org/tracker/CVE-2026-94286"
     }
-  ]
+  ],
+  "pip_vendor": {
+    "cve": "CVE-2025-47273",
+    "package": "setuptools",
+    "version": "70.3.0",
+    "pip_version": "26.3",
+    "wheel_sha256": "f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13",
+    "authority": "https://github.com/pypa/setuptools/security/advisories/GHSA-5rjg-fvgr-3xxf",
+    "maintainer": "https://github.com/pypa/pip/issues/14031"
+  }
 }

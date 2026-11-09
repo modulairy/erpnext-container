@@ -342,7 +342,7 @@ def runtime_inputs(rows, out, base_build):
                 or not all(NpmSpec(spec).match(NodeVersion(node)) for row in rows for spec in row['node'])):
             raise ValueError('Selected apps require a newer runtime; update the base manually')
         (out/'base-images.json').write_text(json.dumps(manifest, indent=2)+'\n')
-        return dict(inputs), manifest['security']['trivy_image'], manifest['security']['grype_image']
+        return {**inputs, 'bootstrap': manifest['bootstrap']}, manifest['security']['trivy_image'], manifest['security']['grype_image']
     py_tags = api('repos/python/cpython/git/matching-refs/tags/v3.14.')
     versions = [r['ref'].split('/')[-1][1:] for r in py_tags
                 if STABLE.fullmatch(r['ref'].split('/')[-1])]
@@ -397,6 +397,7 @@ def main():
     bench = pypi_latest('frappe-bench', python)
     lock = {'schema': 1, 'resolved_at': datetime.now(timezone.utc).isoformat(),
             'framework_major': MAJOR, 'apps': rows, **inputs, 'bench': bench,
+            'bootstrap': json.loads((Path(__file__).resolve().parents[1]/'resources/bootstrap.json').read_text()) if base_build else inputs['bootstrap'],
             'security_overrides': security_versions(python),
             'mariadb_image': image_digest('mariadb:11.8'),
             'redis_image': image_digest('redis:8-alpine'),

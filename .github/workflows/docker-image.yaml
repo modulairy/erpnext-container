@@ -73,6 +73,7 @@ jobs:
             .build/installed-packages.json
             .build/package-integrity.json
             .build/source-fixes.json
+            .build/vendor-assessment.json
             .build/chromium*.json
             .build/*.log
             .build/*security.json

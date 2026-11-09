@@ -46,10 +46,13 @@ def verify(report, lock, installed, policy, tracker):
                 continue
             name, package = rule['source'], finding['PkgName']
             proof = provenance.get(name)
-            if not proof or package not in proof.get('binaries', {}):
+            if not proof:
+                continue
+            binaries = {**proof.get('binaries', {}), **proof.get('build_only_binaries', {})}
+            if package not in binaries:
                 continue
             source = proof['source']
-            binary = proof['binaries'][package]
+            binary = binaries[package]
             expected = lock['os_backports'].get(name)
             if (proof.get('tests_disabled') is not False or source != expected
                     or installed.get('versions', {}).get(package) != binary['version']

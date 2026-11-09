@@ -1,0 +1,550 @@
+{
+  "schema": 1,
+  "image": "ghcr.io/modulairy/erpnext-base@sha256:05d8683fe63edcdc82d2022b72411f620944751e5b2cc0e3813ed9b90336eaf1",
+  "records": [
+    {
+      "cve": "CVE-2026-76642",
+      "package": "libblkid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78408",
+      "package": "libblkid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78409",
+      "package": "libblkid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78410",
+      "package": "libblkid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-76642",
+      "package": "libmount-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78408",
+      "package": "libmount-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78409",
+      "package": "libmount-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78410",
+      "package": "libmount-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-15308",
+      "package": "libpython3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19445",
+      "package": "libpython3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19553",
+      "package": "libpython3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-7210",
+      "package": "libpython3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-82049",
+      "package": "libpython3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-15308",
+      "package": "libpython3.13-stdlib",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19445",
+      "package": "libpython3.13-stdlib",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19553",
+      "package": "libpython3.13-stdlib",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-7210",
+      "package": "libpython3.13-stdlib",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-82049",
+      "package": "libpython3.13-stdlib",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-36849",
+      "package": "libtiff-dev",
+      "version": "4.7.0-3+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-52490",
+      "package": "libtiff-dev",
+      "version": "4.7.0-3+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-36849",
+      "package": "libtiff6",
+      "version": "4.7.0-3+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-52490",
+      "package": "libtiff6",
+      "version": "4.7.0-3+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-36849",
+      "package": "libtiffxx6",
+      "version": "4.7.0-3+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-52490",
+      "package": "libtiffxx6",
+      "version": "4.7.0-3+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-6653",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "CRITICAL",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-74860",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-86138",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-86139",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-86140",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-86142",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-86143",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-86144",
+      "package": "libxml2-dev",
+      "version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2013-7445",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2019-19449",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2019-19814",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2021-3847",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2021-3864",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2024-21803",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2024-58015",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-23102",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-31568",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-46279",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-72042",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-89675",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-90315",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-98118",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-98364",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-98466",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-98715",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-98853",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-98999",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-99109",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-99272",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-99281",
+      "package": "linux-libc-dev",
+      "version": "6.12.116-1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-15308",
+      "package": "python3.13",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19445",
+      "package": "python3.13",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19553",
+      "package": "python3.13",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-7210",
+      "package": "python3.13",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-82049",
+      "package": "python3.13",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-15308",
+      "package": "python3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19445",
+      "package": "python3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-19553",
+      "package": "python3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-7210",
+      "package": "python3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-82049",
+      "package": "python3.13-minimal",
+      "version": "3.13.5-2+deb13u5",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-76642",
+      "package": "uuid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78408",
+      "package": "uuid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78409",
+      "package": "uuid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    },
+    {
+      "cve": "CVE-2026-78410",
+      "package": "uuid-dev",
+      "version": "2.41.5-0+deb13u1",
+      "severity": "HIGH",
+      "type": "debian",
+      "classification": "os-pkgs"
+    }
+  ]
+}
