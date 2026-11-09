@@ -39,6 +39,12 @@ The application build job has only package read permission. A separate base-imag
 After a successful push and provenance/SBOM attestations, the publish job creates a Git tag and GitHub Release containing the image digest, source revision, locked applications and Actions evidence. The first release uses the ERPNext tag; rebuilding that ERPNext version from a different source revision uses `<ERPNext-tag>-<7-character-commit-SHA>`. Existing source tags are never moved. The GHCR tag remains the ERPNext tag. Only the publish job has the repository write permission needed for tags/releases. Logout runs last, including on failure.
 
 
+## Frappe framework image
+
+**Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the same cached base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
+
+The runtime uses a version/hash-pinned official Chrome for Testing headless shell. A separate pinned Grype product scan must detect a known affected Chrome control and find no high/critical issues in the selected release. Raw results are retained. Reviewed Debian source fixes pass only when the official fixed version, locked source hashes, installed package version and package integrity agree; unmatched findings remain blocking. Python's pyexpat and ElementTree modules are rebuilt from the exact CPython source against the reviewed Expat and verified in the installed image.
+
 ## Shared base images
 
 `Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Both stop before Bench installation. Runtime contains Python, Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder adds npm/Yarn, compilers and development libraries; these tools do not enter the final application image.

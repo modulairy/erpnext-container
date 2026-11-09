@@ -63,6 +63,7 @@ jobs:
             .build/redis.lua
             .build/base-images.json
             .build/base-config.json
+            .build/chromium*.json
             .build/base/
             .build/resolve.log
           retention-days: 14

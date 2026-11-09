@@ -12,7 +12,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get('BUILD_DIR', ROOT/'.build')).resolve()
-IMAGE = 'erpnext-community:test'
+PROFILE = os.environ.get('BUILD_PROFILE', 'erpnext')
+if PROFILE not in ('erpnext', 'frappe'):
+    raise ValueError('Unknown build profile')
+IMAGE = PROFILE+'-community:test'
 
 
 def run(args, **kwargs):
@@ -26,14 +29,14 @@ def load():
 
 BASE_IMAGE = 'ghcr.io/modulairy/erpnext-base'
 BASE_FIELDS = ('python', 'node', 'python_image', 'node_image', 'yarn',
-               'mariadb_client', 'curl_backport', 'os_backports')
+               'mariadb_client', 'curl_backport', 'os_backports', 'chromium', 'pyexpat_sources')
 
 
 def base_key(lock):
     # App releases, Bench and resolved_at must never invalidate OS compilation.
     inputs = {'platform': 'linux/amd64', 'lock': {k: lock[k] for k in BASE_FIELDS},
               'files': {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
-                        for name in ('Containerfile.base', 'scripts/os_backports.py')}}
+                        for name in ('Containerfile.base', 'scripts/os_backports.py', 'scripts/chromium.py', 'scripts/python_expat.py')}}
     return hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -62,6 +65,14 @@ def config():
          '--severity', 'HIGH,CRITICAL', '--exit-code', '1',
          '--skip-dirs', '/source/.git,/source/.build', '--format', 'json',
          '--output', '/scan/base-config.json', '/source'])
+    cache = 'chrome-config-'+secrets.token_hex(4)
+    run(['docker', 'volume', 'create', cache])
+    try:
+        result = scan_chromium(lock, cache)
+        if result['blocking']:
+            raise ValueError('Chrome release has blocking product vulnerabilities')
+    finally:
+        run(['docker', 'volume', 'rm', cache])
 
 
 def base():
@@ -128,16 +139,35 @@ def locked_base_images(lock):
     return images
 
 
+
+def select_profile(lock, profile):
+    if profile not in ('erpnext', 'frappe'):
+        raise ValueError('Unknown build profile')
+    result = json.loads(json.dumps(lock))
+    result['profile'] = profile
+    if profile == 'frappe':
+        apps = [app for app in result['apps'] if app['name'] == 'frappe']
+        if len(apps) != 1 or not re.fullmatch(r'v\d+\.\d+\.\d+', apps[0]['ref']):
+            raise ValueError('Missing stable Frappe source')
+        result['apps'] = apps
+        result['frappe_tag'] = apps[0]['ref']
+        result.pop('erpnext_tag', None)
+        result['community_patches'] = {name: patch for name, patch in result['community_patches'].items()
+                                       if name == 'frappe'}
+    return result
+
 def build():
-    lock = load()
+    lock = select_profile(load(), PROFILE)
     bases = locked_base_images(lock)
     lock['base_images'] = bases
     (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
     args = ['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--load',
-            '--build-context', f'resolved={OUT}', '--file', 'Containerfile', '--tag', IMAGE]
+            '--build-context', f'resolved={OUT}', '--file',
+            'Containerfile.frappe' if PROFILE == 'frappe' else 'Containerfile', '--tag', IMAGE]
     values = {'RUNTIME_BASE_IMAGE': bases['runtime'], 'BUILDER_BASE_IMAGE': bases['builder'],
               'BENCH_VERSION': lock['bench'],
-              'ERPNEXT_TAG': lock['erpnext_tag'],
+              ('FRAPPE_TAG' if PROFILE == 'frappe' else 'ERPNEXT_TAG'):
+                  lock['frappe_tag' if PROFILE == 'frappe' else 'erpnext_tag'],
               'SOURCE_REVISION': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
     for key, value in values.items():
         args += ['--build-arg', f'{key}={value}']
@@ -145,6 +175,30 @@ def build():
     inventory = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'cat', IMAGE,
                                         '/home/frappe/frappe-bench/image-lock.json'])
     (OUT/'image-lock.json').write_bytes(inventory)
+    inventory = json.loads(inventory)
+    query = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'dpkg-query', IMAGE,
+                                     '-W', '-f=${Package}\\t${Version}\\n'], text=True)
+    versions = dict(line.split('\t', 1) for line in query.splitlines())
+    packages = sorted({name for proof in inventory['os_backport_provenance'].values()
+                       for name in proof['binaries']})
+    integrity = subprocess.run(['docker', 'run', '--rm', '--entrypoint', 'dpkg', IMAGE,
+                                '--verify', *packages], capture_output=True, text=True)
+    if integrity.returncode or integrity.stdout.strip():
+        raise ValueError('Installed backport package integrity check failed: '+integrity.stdout)
+    xml_check = ("import hashlib,json,pyexpat; from pathlib import Path; "
+                 "import _elementtree; "
+                 "print(json.dumps({'version':pyexpat.EXPAT_VERSION,'binaries':{"
+                 "name:hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest() "
+                 "for name,module in [('pyexpat',pyexpat),('_elementtree',_elementtree)]}}))")
+    xml = json.loads(subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'python',
+                                             IMAGE, '-c', xml_check], text=True))
+    proof = inventory['python_expat_provenance']
+    if (proof['sources'] != lock['pyexpat_sources'] or proof['tests_passed'] is not True
+            or xml['version'] != proof['expat_version']
+            or any(xml['binaries'][name] != item['sha256'] for name, item in proof['binaries'].items())):
+        raise ValueError('Installed Python XML modules differ from verified build provenance')
+    (OUT/'installed-packages.json').write_text(json.dumps(
+        {'versions': versions, 'verified_packages': packages, 'python_xml': xml}, indent=2)+'\n')
     image_id = subprocess.check_output(['docker', 'image', 'inspect', IMAGE, '--format', '{{.Id}}'], text=True).strip()
     (OUT/'image-id.txt').write_text(image_id)
     run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
@@ -193,11 +247,11 @@ def integration():
         run(compose+['down', '-v', '--remove-orphans'], env=env)
 
 
-def assess_report(data, exceptions=(), advisory=False):
+def assess_report(data, exceptions=(), advisory=False, verified_fixed=()):
     """Keep raw evidence; exempt only exact approved vulnerability records."""
     if not isinstance(data.get('Results'), list) or data.get('SchemaVersion') != 2:
         raise ValueError('Missing or unsupported scanner results')
-    accepted, blocking, reported = [], [], []
+    accepted, blocking, reported, patched = [], [], [], []
     for row in data['Results']:
         for finding in row.get('Vulnerabilities', []):
             key = dict(cve=finding['VulnerabilityID'], package=finding['PkgName'],
@@ -205,6 +259,8 @@ def assess_report(data, exceptions=(), advisory=False):
                        type=row['Type'], classification=row['Class'])
             if advisory:
                 reported.append(key)
+            elif key in verified_fixed:
+                patched.append(key)
             elif key in exceptions:
                 accepted.append(key)
             else:
@@ -214,8 +270,42 @@ def assess_report(data, exceptions=(), advisory=False):
             blocking.extend(f for f in row.get(kind, [])
                             if f.get('Severity') in ('HIGH', 'CRITICAL')
                             and f.get('Status', 'FAIL') != 'PASS')
-    return dict(accepted=accepted, blocking=blocking, advisory=reported)
+    return dict(accepted=accepted, blocking=blocking, advisory=reported, verified_fixed=patched)
 
+
+
+def scan_chromium(lock, cache):
+    from chromium import component
+    chrome = component(lock['chromium'])
+    document = {'bomFormat': 'CycloneDX', 'specVersion': '1.6', 'version': 1, 'components': [chrome]}
+    (OUT/'chromium.cdx.json').write_text(json.dumps(document, indent=2)+'\n')
+    control = json.loads(json.dumps(document))
+    item = control['components'][0]
+    item['version'] = '156.0.8078.79'
+    item['purl'] = 'pkg:generic/google/chrome-headless-shell@'+item['version']
+    item['cpe'] = 'cpe:2.3:a:google:chrome:'+item['version']+':*:*:*:*:linux:*:*'
+    item.pop('hashes', None)
+    item.pop('externalReferences', None)
+    (OUT/'chromium-control.cdx.json').write_text(json.dumps(control, indent=2)+'\n')
+    grype = ['docker', 'run', '--rm', '-v', f'{OUT}:/scan', '-v', f'{cache}:/cache',
+             '-e', 'GRYPE_DB_CACHE_DIR=/cache/grype', '-e', 'GRYPE_MATCH_STOCK_USING_CPES=true',
+             '-e', 'GRYPE_DB_REQUIRE_UPDATE_CHECK=true', '-e', 'GRYPE_CHECK_FOR_APP_UPDATE=false',
+             lock['grype_image']]
+    reports = {}
+    for name in ('chromium-control', 'chromium'):
+        filename = name+'-security.json'
+        result = subprocess.run(grype+['cpe:2.3:a:google:chrome:'+('156.0.8078.79' if name == 'chromium-control' else lock['chromium']['version'])+':*:*:*:*:*:*:*', '--output', 'json',
+                                       '--file', '/scan/'+filename])
+        if result.returncode:
+            raise ValueError('Chrome product scanner failed')
+        report = json.loads((OUT/filename).read_text())
+        if not isinstance(report.get('matches'), list):
+            raise ValueError('Chrome product scanner returned invalid results')
+        reports[name] = [m for m in report['matches']
+                         if m['vulnerability']['severity'].upper() in ('HIGH', 'CRITICAL')]
+    if not reports['chromium-control']:
+        raise ValueError('Chrome CPE scan coverage control failed')
+    return {'accepted': [], 'blocking': reports['chromium'], 'advisory': [], 'verified_fixed': []}
 
 def scan():
     cache = 'erpnext-scan-'+secrets.token_hex(4)
@@ -246,6 +336,13 @@ def scan_with_cache(cache):
     policy = json.loads((ROOT/'security-exceptions.json').read_text())
     failed = False
     assessments = {}
+    source_proofs = []
+    try:
+        assessments['chromium-security.json'] = scan_chromium(lock, cache)
+        failed |= bool(assessments['chromium-security.json']['blocking'])
+    except (ValueError, KeyError, OSError, TypeError) as error:
+        failed = True
+        assessments['chromium-security.json'] = {'scanner_error': str(error)}
     for args in checks:
         filename = Path(args[args.index('--output')+1]).name
         report = OUT/filename
@@ -256,19 +353,38 @@ def scan_with_cache(cache):
             assessments[filename] = {'scanner_error': result.returncode}
             continue
         try:
-            assessment = assess_report(json.loads(report.read_text(encoding='utf-8')),
+            data = json.loads(report.read_text(encoding='utf-8'))
+            if filename == 'vulnerabilities.json':
+                from source_fixes import verify, tracker_data, TRACKER
+                tracker, tracker_sha = tracker_data()
+                source_proofs = verify(data, json.loads((OUT/'image-lock.json').read_text()),
+                    json.loads((OUT/'installed-packages.json').read_text()),
+                    json.loads((ROOT/'security-remediations.json').read_text()), tracker)
+                (OUT/'source-fixes.json').write_text(json.dumps(
+                    {'authority': TRACKER, 'tracker_sha256': tracker_sha, 'fixes': source_proofs}, indent=2)+'\n')
+            assessment = assess_report(data,
                 policy['application'] if filename == 'vulnerabilities.json' else (),
-                advisory=filename == 'service-mariadb-security.json')
+                advisory=filename == 'service-mariadb-security.json',
+                verified_fixed=[proof['finding'] for proof in source_proofs] if filename == 'vulnerabilities.json' else ())
             assessments[filename] = assessment
             failed |= bool(assessment['blocking'])
         except (ValueError, KeyError, OSError, TypeError) as error:
             failed = True
             assessments[filename] = {'report_error': str(error)}
+    from chromium import component
+    sbom = json.loads((OUT/'sbom.cdx.json').read_text())
+    chrome_component = component(lock['chromium'])
+    if not any(c.get('purl') == chrome_component['purl'] for c in sbom.setdefault('components', [])):
+        sbom['components'].append(chrome_component)
+    sbom.setdefault('metadata', {}).setdefault('properties', []).append(
+        {'name': 'container:verified-source-fixes', 'value': json.dumps(source_proofs, sort_keys=True)})
+    (OUT/'sbom.cdx.json').write_text(json.dumps(sbom, indent=2)+'\n')
     (OUT/'gate-security.json').write_text(json.dumps(assessments, indent=2)+'\n')
     for filename, assessment in assessments.items():
         summary = (f"{filename}: {len(assessment.get('accepted', []))} accepted, "
                    f"{len(assessment.get('advisory', []))} advisory, "
                    f"{len(assessment.get('blocking', []))} blocking; "
+                   f"{len(assessment.get('verified_fixed', []))} verified fixed; "
                    f"errors: {assessment.get('scanner_error', assessment.get('report_error', 'none'))}")
         print(summary)
         if os.environ.get('GITHUB_STEP_SUMMARY'):

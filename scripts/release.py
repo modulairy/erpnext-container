@@ -22,10 +22,13 @@ def api(method, path, payload=None):
         raise RuntimeError(f'GitHub release API failed: {method} {path}, HTTP {error.code}') from None
 
 
-def publish(lock, digest, repository, revision, run_id, run_number):
-    tag = lock['erpnext_tag']
+def publish(lock, digest, repository, revision, run_id, run_number, component='erpnext'):
+    if component not in ('erpnext', 'frappe'):
+        raise ValueError('Unexpected release component')
+    tag = lock['frappe_tag' if component == 'frappe' else 'erpnext_tag']
+    source_tag = ('frappe-' if component == 'frappe' else '')+tag
     if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
-        raise ValueError('Invalid ERPNext tag')
+        raise ValueError('Invalid application tag')
     if repository != 'modulairy/erpnext-container' or not re.fullmatch('[0-9a-f]{40}', revision):
         raise ValueError('Unexpected release source')
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
@@ -34,30 +37,31 @@ def publish(lock, digest, repository, revision, run_id, run_number):
         raise ValueError('Invalid Actions run')
     base = f'repos/{repository}'
     # Keep existing source tags immutable when rebuilding the same ERPNext release.
-    existing = api('GET', base+'/git/ref/tags/'+tag)
-    release_tag = tag if not existing or existing['object']['sha'] == revision else f'{tag}-{revision[:7]}'
-    ref = existing if release_tag == tag else api('GET', base+'/git/ref/tags/'+release_tag)
+    existing = api('GET', base+'/git/ref/tags/'+source_tag)
+    release_tag = source_tag if not existing or existing['object']['sha'] == revision else f'{source_tag}-{revision[:7]}'
+    ref = existing if release_tag == source_tag else api('GET', base+'/git/ref/tags/'+release_tag)
     if ref and (ref['object']['type'] != 'commit' or ref['object']['sha'] != revision):
         raise ValueError('Release tag already identifies another source; refusing to move it')
     if not ref:
         api('POST', base+'/git/refs', {'ref':'refs/tags/'+release_tag, 'sha':revision})
-    image = 'ghcr.io/modulairy/erpnext:'+tag
+    image = 'ghcr.io/modulairy/'+component+':'+tag
     versions = '\n'.join(f"- {a['name']}: {a['ref']} (`{a['sha']}`)" for a in lock['apps'])
     backports = '\n'.join(f"- {name}: {entry['upstream_pr']} (patch SHA-256 `{entry['sha256']}`)"
                          for name, entry in lock.get('community_patches', {}).items())
-    body = (f'Community ERPNext image: `{image}`\n\n'
+    body = (f'{component.title()} image: `{image}`\n\n'
         f'Immutable image: `{image.split(":")[0]}@{digest}`\n\n'
-        f'Source: `{revision}`\n\n'
+        f'Source: `{revision}`; Bench: `{lock.get("bench", "recorded in lock")}`\n\n'
         f'[Build, test and publication evidence](https://github.com/{repository}/actions/runs/{run_id})\n\n'
         'Application installation/migrations, API/queues/realtime, Chromium PDFs and Redis cache checks passed. '
-        'The security gate uses the repository\'s owner-approved exact OS exceptions; external MariaDB findings are advisory. '
+        'Chrome product scanning and source-integrity verification passed. '
+        'The security gate records owner-approved exact OS exceptions and separately reports source fixes verified against Debian records and installed package integrity; external MariaDB findings are advisory. '
         'Passing the gate does not mean the image has no known vulnerabilities. '
         'SBOM and provenance attestations are published with this digest.\n\n'
         'Locked application sources:\n'+versions+
         ('\n\nReviewed Frappe 16 backports:\n'+backports if backports else ''))
     release = api('GET', base+'/releases/tags/'+release_tag)
     payload = {'tag_name':release_tag,'target_commitish':revision,'name':release_tag,
-               'body':body,'draft':False,'prerelease':False,'make_latest':'true'}
+               'body':body,'draft':False,'prerelease':False,'make_latest':'false' if component == 'frappe' else 'true'}
     if release:
         if release.get('immutable'):
             if digest not in release.get('body',''):
@@ -77,7 +81,7 @@ def publish(lock, digest, repository, revision, run_id, run_number):
 if __name__ == '__main__':
     url = publish(json.loads(Path('verified/lock.json').read_text()), os.environ['IMAGE_DIGEST'],
         os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA'],
-        os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_NUMBER'])
+        os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_NUMBER'], os.environ.get('RELEASE_COMPONENT', 'erpnext'))
     print(url)
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
         summary.write('GitHub Release: '+url+'\n')

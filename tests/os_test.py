@@ -16,6 +16,17 @@ def main():
     assert x11.XInitThreads() != 0
     ctypes.CDLL('libXrender.so.1')
     ctypes.CDLL('libXtst.so.6')
+    ctypes.CDLL('libXi.so.6')
+    import pyexpat
+    import sqlite3
+    assert tuple(map(int, pyexpat.EXPAT_VERSION.split('_')[-1].split('.'))) >= (2, 10, 0)
+    assert sqlite3.sqlite_version_info >= (3, 54, 1)
+    assert pyexpat.ParserCreate().Parse('<root><item>ok</item></root>', True) == 1
+    with sqlite3.connect(':memory:') as database:
+        database.execute('CREATE VIRTUAL TABLE notes USING fts5(body)')
+        database.execute('INSERT INTO notes VALUES (?)', ('Frappe security test',))
+        assert database.execute("SELECT count(*) FROM notes WHERE notes MATCH 'Frappe'").fetchone()[0] == 1
+        assert database.execute("SELECT json_extract(?, '$.ok')", ('{"ok":true}',)).fetchone()[0] == 1
     lib = ctypes.CDLL('libsndfile.so.1')
     lib.sf_open.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(Info)]
     lib.sf_open.restype = ctypes.c_void_p

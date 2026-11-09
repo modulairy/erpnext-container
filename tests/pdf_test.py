@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 
 
-def verify_pdf(session, base):
+def verify_sandbox():
     import frappe
     from pypdf import PdfReader, PdfWriter
     from frappe.utils.pdf import get_pdf
@@ -47,6 +47,13 @@ def verify_pdf(session, base):
         generator._close_browser()
     print('PASS: Chromium renderer PID namespace, seccomp, no-new-privileges and zero capabilities', flush=True)
 
+    return folder
+
+
+def verify_pdf(session, base):
+    import frappe
+    from pypdf import PdfReader
+    folder = verify_sandbox()
     company = 'Container PDF Company'
     if not frappe.db.exists('Company', company):
         from erpnext.setup.setup_wizard.operations.install_fixtures import install
@@ -111,6 +118,40 @@ def verify_pdf(session, base):
     assert reader.pages[0].mediabox.width > reader.pages[0].mediabox.height
     print('PASS: authenticated Frappe report PDF endpoint with database invoice data and landscape output', flush=True)
 
+    verify_renderer(folder)
+
+
+
+def verify_frappe_pdf(session, base):
+    import frappe
+    from pypdf import PdfReader
+    folder = verify_sandbox()
+    todo = frappe.get_doc({'doctype': 'ToDo', 'description': 'İstanbul Şişli Frappe PDF', 'status': 'Open'}).insert()
+    frappe.db.commit()
+    response = session.post(base+'/api/method/frappe.utils.print_format.download_pdf',
+        data={'doctype': 'ToDo', 'name': todo.name, 'format': 'Standard', 'no_letterhead': 1}, timeout=100)
+    if not response.ok:
+        data = response.json()
+        raise AssertionError('Frappe PDF API failed: '+str(data.get('exception', data.get('exc_type', response.status_code)))[:240])
+    assert response.content.startswith(b'%PDF-')
+    (folder/'frappe.pdf').write_bytes(response.content)
+    text = '\n'.join(page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages)
+    assert 'İstanbul Şişli Frappe PDF' in text, text
+    html = frappe.render_template('<html><body><h1>Frappe Report</h1><p>{{ name }}</p></body></html>', {'name': todo.name})
+    response = session.post(base+'/api/method/frappe.utils.print_format.report_to_pdf',
+                            data={'html': html, 'orientation': 'Landscape'}, timeout=100)
+    response.raise_for_status()
+    reader = PdfReader(io.BytesIO(response.content))
+    assert todo.name in reader.pages[0].extract_text()
+    assert reader.pages[0].mediabox.width > reader.pages[0].mediabox.height
+    (folder/'report.pdf').write_bytes(response.content)
+    print('PASS: authenticated Frappe document/report PDF exports without ERPNext', flush=True)
+    verify_renderer(folder)
+
+def verify_renderer(folder):
+    import frappe
+    from pypdf import PdfReader, PdfWriter
+    from frappe.utils.pdf import get_pdf
     html = '<html><body><h1>İstanbul Şişli</h1><div style="break-before:page">Second page</div></body></html>'
     pdf = get_pdf(html, options={'password': 'test-only-password'})
     reader = PdfReader(io.BytesIO(pdf))

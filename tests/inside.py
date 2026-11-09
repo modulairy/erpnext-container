@@ -62,7 +62,8 @@ def setup():
 
 
 def verify():
-    command('node', '/tests/zod_test.cjs')
+    if LOCK.get('profile') != 'frappe':
+        command('node', '/tests/zod_test.cjs')
     command('python', '/tests/os_test.py')
     for source in LOCK['os_backport_provenance'].values():
         for name in source['build_only_binaries']:
@@ -185,30 +186,36 @@ def verify():
     frappe.db.commit()
     session.cookies.clear()
     session.headers['Authorization'] = f'token {key}:{secret}'
-    response = session.post(base+'/api/resource/UOM', json={
-        'uom_name': 'Container Smoke Unit'}, timeout=30)
+    doctype = 'ToDo' if LOCK.get('profile') == 'frappe' else 'UOM'
+    fields = {'description': 'Container Smoke Task', 'status': 'Open'} if doctype == 'ToDo' else {'uom_name': 'Container Smoke Unit'}
+    response = session.post(base+'/api/resource/'+doctype, json=fields, timeout=30)
     if not response.ok:
         detail = response.text.replace(secret, '[REDACTED]').replace(key, '[REDACTED]')
         raise RuntimeError(f'API create failed: {response.status_code}: {detail}')
-    response.raise_for_status()
     name = response.json()['data']['name']
-    response = session.get(base+'/api/resource/UOM/'+quote(name, safe=''), timeout=30)
+    endpoint = base+'/api/resource/'+doctype+'/'+quote(name, safe='')
+    response = session.get(endpoint, timeout=30)
     response.raise_for_status()
-    assert response.json()['data']['uom_name'] == 'Container Smoke Unit'
-    response = session.delete(base+'/api/resource/UOM/'+quote(name, safe=''), timeout=30)
+    for field, value in fields.items():
+        assert response.json()['data'][field] == value
+    response = session.delete(endpoint, timeout=30)
     response.raise_for_status()
     # All three queue roles must execute an actual job, not merely start a process.
     print('PASS: authenticated API CRUD and application inventory', flush=True)
-    from pdf_test import verify_pdf
-    verify_pdf(session, base)
+    from pdf_test import verify_pdf, verify_frappe_pdf
+    (verify_frappe_pdf if LOCK.get('profile') == 'frappe' else verify_pdf)(session, base)
     from cache_test import verify_cache
     verify_cache()
     frappe.db.commit()
     assert frappe.conf.allow_tests, 'Application tests must be explicitly enabled on the disposable site'
-    command('bench', '--site', SITE, 'run-tests', '--app', 'helpdesk',
-            '--module', 'helpdesk.tests.test_ticket_search_backend')
-    from community_test import verify_community
-    verify_community(session, base)
+    if LOCK.get('profile') == 'frappe':
+        from community_test import symlink_discovery
+        symlink_discovery()
+    else:
+        command('bench', '--site', SITE, 'run-tests', '--app', 'helpdesk',
+                '--module', 'helpdesk.tests.test_ticket_search_backend')
+        from community_test import verify_community
+        verify_community(session, base)
     jobs = [frappe.enqueue('frappe.utils.now', queue=q, job_name=f'container-smoke-{q}')
             for q in ('short', 'default', 'long')]
     deadline = time.monotonic() + 120

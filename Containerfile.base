@@ -4,8 +4,8 @@ ARG NODE_IMAGE
 FROM ${NODE_IMAGE} AS node
 FROM ${PYTHON_IMAGE} AS os-backports
 COPY --from=resolved lock.json /opt/build/lock.json
-COPY scripts/os_backports.py /opt/build/os_backports.py
-RUN python /opt/build/os_backports.py
+COPY scripts/os_backports.py scripts/python_expat.py /opt/build/
+RUN python /opt/build/os_backports.py && python /opt/build/python_expat.py
 FROM ${PYTHON_IMAGE} AS runtime-base
 ENV PATH=/home/frappe/frappe-bench/env/bin:/usr/local/bin:${PATH} \
     PYTHONUNBUFFERED=1 \
@@ -21,6 +21,7 @@ RUN useradd -m -u 1000 -s /bin/bash frappe \
        mariadb-client libmariadb3 libpq5 libmagic1 media-types tzdata-legacy \
        chromium-headless-shell fonts-dejavu-core libnginx-mod-http-lua libnginx-mod-http-srcache-filter lua-cjson \
     && apt-get install -y --no-remove --no-install-recommends /opt/os-backports/*.deb \
+    && apt-get purge -y chromium-headless-shell chromium-common \
     && dpkg --purge libperl5.40 perl-modules-5.40 \
     && rm -f /opt/os-backports/*.deb \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
@@ -35,6 +36,10 @@ RUN python -c 'import hashlib,json,re,subprocess; from pathlib import Path; p=js
 RUN python -c 'import json,re,subprocess; from pathlib import Path; v=json.load(open("/opt/build/lock.json"))["curl_backport"]; assert re.fullmatch(r"\d+\.\d+\.\d+-\d+~bpo13\+\d+(?:\+b\d+)?",v); Path("/etc/apt/sources.list.d/backports.list").write_text("deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] https://deb.debian.org/debian trixie-backports main\n"); subprocess.run(["apt-get","update"],check=True); subprocess.run(["apt-get","install","-y","--no-install-recommends","-t","trixie-backports"]+[name+"="+v for name in ("curl","libcurl3t64-gnutls","libcurl4-gnutls","libcurl4t64")],check=True)' \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python -c 'import json,shutil,sysconfig; from pathlib import Path; p=json.loads(Path("/opt/os-backports/pyexpat/provenance.json").read_text()); [shutil.copy2(Path("/opt/os-backports/pyexpat")/item["file"],Path(sysconfig.get_config_var("DESTSHARED"))/item["file"]) for item in p["binaries"].values()]' \
+    && python -c 'import pyexpat,xml.etree.ElementTree as e; assert tuple(map(int,pyexpat.EXPAT_VERSION.split("_")[-1].split("."))) >= (2,10,0); assert e.fromstring("<root>ok</root>").text == "ok"'
+COPY scripts/chromium.py /opt/build/chromium.py
+RUN python /opt/build/chromium.py
 USER frappe
 LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-container"
 FROM runtime-base AS builder-base

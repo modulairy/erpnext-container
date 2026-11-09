@@ -1,8 +1,11 @@
 *
 !Containerfile
 !Containerfile.base
+!Containerfile.frappe
 !scripts/
 !scripts/os_backports.py
+!scripts/chromium.py
+!scripts/python_expat.py
 !scripts/build.py
 !scripts/security.py
 !scripts/pdf_overlay.py

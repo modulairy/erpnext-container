@@ -1,0 +1,177 @@
+name: Frappe framework
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested image to GHCR (main only)
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  BUILD_PROFILE: frappe
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: community-frappe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  base:
+    uses: ./.github/workflows/base-image.yaml
+    permissions:
+      contents: read
+      packages: write
+
+  verify:
+    needs: base
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Unit tests
+        run: |
+          python -m pip install -r requirements-ci.txt
+          python -m unittest discover -s tests -v
+          bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
+      - name: Download matching resolved inputs and base digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: resolved-inputs
+          path: .build
+          digest-mismatch: error
+      - name: Authenticate base image pulls
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+      - name: Build immutable inputs
+        id: build
+        run: python scripts/pipeline.py build
+      - name: Application integration tests
+        id: integration
+        run: python scripts/pipeline.py integration
+      - name: Security gates and SBOM
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: python scripts/pipeline.py scan
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports
+          include-hidden-files: true
+          path: |
+            .build/lock.json
+            .build/image-lock.json
+            .build/base-images.json
+            .build/installed-packages.json
+            .build/source-fixes.json
+            .build/chromium*.json
+            .build/*.log
+            .build/*security.json
+            .build/vulnerabilities.json
+            .build/sbom.cdx.json
+            .build/image-id.txt
+            .build/pdf/
+          retention-days: 14
+      - name: Upload verified image
+        if: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-image
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .build/image.tar
+            .build/image-id.txt
+            .build/lock.json
+            .build/sbom.cdx.json
+          compression-level: 0
+          retention-days: 1
+      - name: Reject publishing from other branches
+        if: ${{ inputs.publish && github.ref != 'refs/heads/main' }}
+        run: |
+          echo 'Publishing requires a manual run on main.' >&2
+          exit 1
+      - name: Logout after base image pulls
+        if: ${{ always() }}
+        run: docker logout ghcr.io
+
+  publish:
+    needs: verify
+    if: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download verified image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: verified-image
+          path: verified
+          digest-mismatch: error
+      - name: Publish exact tested image
+        id: push
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load --input verified/image.tar
+          expected=$(cat verified/image-id.txt)
+          actual=$(docker image inspect frappe-community:test --format '{{.Id}}')
+          test "$actual" = "$expected"
+          tag=$(jq -er '.frappe_tag | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' verified/lock.json)
+          image="ghcr.io/modulairy/frappe:$tag"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker tag "$actual" "$image"
+          docker push "$image"
+          digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)
+          test -n "$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published $image@$digest" >> "$GITHUB_STEP_SUMMARY"
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/modulairy/frappe
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Attest SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ghcr.io/modulairy/frappe
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: verified/sbom.cdx.json
+          push-to-registry: true
+      - name: Create GitHub tag and Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          RELEASE_COMPONENT: frappe
+        run: python3 scripts/release.py
+      - name: Logout from GHCR
+        if: ${{ always() }}
+        run: docker logout ghcr.io

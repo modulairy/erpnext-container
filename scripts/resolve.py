@@ -278,7 +278,8 @@ def os_backports():
     index = lzma.decompress(request(url)).decode()
     reviewed = {'acl': '2.4.0-1', 'ncurses': '6.6+20260608-2',
                 'perl': '5.42.3-1', 'systemd': '262.2-1', 'libsndfile': '1.2.2-4',
-                'libx11': '2:1.8.14-1', 'libxrender': '1:0.9.13-1', 'libxtst': '2:1.2.6-1'}
+                'libx11': '2:1.8.14-1', 'libxrender': '1:0.9.13-1', 'libxtst': '2:1.2.6-1',
+                'expat': '2.10.0-1', 'sqlite3': '3.54.1-2', 'libxi': '2:1.8.4-1'}
     result = {}
     for paragraph in index.split('\n\n'):
         fields = {}
@@ -314,11 +315,22 @@ def os_backports():
             'sha256': digest}
         # Stay newer than the exact reviewed Debian source revision we rebuild.
         result[name]['binary_version'] = reviewed[name] + '+container1'
+    result['sqlite3'].update(binary_version='3.54.1-2+container1', build_tcl='9.0')
     result['libsndfile'].update(binary_version='1.2.2-4+container1', patch={
         'url': 'https://github.com/libsndfile/libsndfile/commit/cdadf9a65fdc1f28da9d235eb443d5f5e57010d2.patch',
         'sha256': '19828cfdc17b80f13c8d1fcc8b828ea5c328071d91171c6d80f94a2e1499b719'})
     return result
 
+
+
+def pyexpat_sources(python):
+    files = {'pyexpat.c': 'Modules/pyexpat.c', '_elementtree.c': 'Modules/_elementtree.c',
+             'clinic/_elementtree.c.h': 'Modules/clinic/_elementtree.c.h',
+         'clinic/pyexpat.c.h': 'Modules/clinic/pyexpat.c.h',
+             'expat_config.h': 'Modules/expat/expat_config.h', 'pyexpat.h': 'Include/pyexpat.h'}
+    return {name: {'url': f'https://raw.githubusercontent.com/python/cpython/v{python}/{path}',
+                   'sha256': hashlib.sha256(request(f'https://raw.githubusercontent.com/python/cpython/v{python}/{path}')).hexdigest()}
+            for name, path in files.items()}
 
 def main():
     from community_overlay import selected_patches
@@ -369,7 +381,10 @@ def main():
             'mariadb_image': image_digest('mariadb:11.8'),
             'redis_image': image_digest('redis:8-alpine'),
             'trivy_image': image_digest(f'aquasec/trivy:{trivy.lstrip("v")}'),
-            'pdf_engine': 'sandboxed-system-chromium'}
+            'pdf_engine': 'sandboxed-official-headless-shell',
+            'chromium': json.loads((Path(__file__).resolve().parents[1]/'resources/chromium.json').read_text()),
+            'grype_image': image_digest('anchore/grype:v0.121.2'),
+            'pyexpat_sources': pyexpat_sources(python)}
     lock['redis_lua'] = redis_lua(out)
     lock['community_patches'] = selected_patches(rows)
     (out/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')

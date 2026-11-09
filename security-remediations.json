@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "fixes": [
+    {
+      "source": "expat",
+      "cve": "CVE-2026-113351",
+      "fixed_version": "2.10.0-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-113351"
+    },
+    {
+      "source": "expat",
+      "cve": "CVE-2026-115506",
+      "fixed_version": "2.10.0-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-115506"
+    },
+    {
+      "source": "expat",
+      "cve": "CVE-2026-117610",
+      "fixed_version": "2.10.0-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-117610"
+    },
+    {
+      "source": "expat",
+      "cve": "CVE-2026-118370",
+      "fixed_version": "2.10.0-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-118370"
+    },
+    {
+      "source": "sqlite3",
+      "cve": "CVE-2026-119373",
+      "fixed_version": "3.54.1-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-119373"
+    },
+    {
+      "source": "sqlite3",
+      "cve": "CVE-2026-119374",
+      "fixed_version": "3.54.1-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-119374"
+    },
+    {
+      "source": "sqlite3",
+      "cve": "CVE-2026-119379",
+      "fixed_version": "3.54.1-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-119379"
+    },
+    {
+      "source": "systemd",
+      "cve": "CVE-2026-16742",
+      "fixed_version": "261.2-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-16742"
+    },
+    {
+      "source": "libx11",
+      "cve": "CVE-2026-88806",
+      "fixed_version": "2:1.8.14-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-88806"
+    },
+    {
+      "source": "libxi",
+      "cve": "CVE-2026-109089",
+      "fixed_version": "2:1.8.4-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-109089"
+    },
+    {
+      "source": "libxi",
+      "cve": "CVE-2026-109090",
+      "fixed_version": "2:1.8.4-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-109090"
+    },
+    {
+      "source": "libxrender",
+      "cve": "CVE-2026-88807",
+      "fixed_version": "1:0.9.13-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-88807"
+    },
+    {
+      "source": "libxtst",
+      "cve": "CVE-2026-94286",
+      "fixed_version": "2:1.2.6-1",
+      "url": "https://security-tracker.debian.org/tracker/CVE-2026-94286"
+    }
+  ]
+}

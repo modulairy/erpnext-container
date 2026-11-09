@@ -32,6 +32,8 @@ class BaseImageTests(unittest.TestCase):
             (root/'scripts').mkdir()
             (root/'Containerfile.base').write_text('base')
             (root/'scripts/os_backports.py').write_text('backports')
+            (root/'scripts/chromium.py').write_text('chromium')
+            (root/'scripts/python_expat.py').write_text('python XML modules')
             with patch.object(pipeline, 'ROOT', root):
                 first = pipeline.base_key(self.lock)
                 (root/'scripts/os_backports.py').write_text('updated backports')

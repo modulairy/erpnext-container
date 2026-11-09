@@ -20,10 +20,15 @@ def install():
     sources = Path('/home/frappe/sources')
     allowed = {'frappe', 'erpnext', 'payments', 'telephony', 'helpdesk', 'builder',
                'webshop', 'crm', 'wiki', 'print_designer'}
+    if lock.get('profile', 'erpnext') == 'frappe':
+        allowed = {'frappe'}
+    elif lock.get('profile', 'erpnext') != 'erpnext':
+        raise ValueError('Unknown application profile')
     if {a['name'] for a in lock['apps']} != allowed:
         raise ValueError('Unexpected application set')
     sources.mkdir()
     lock['source_overlays'] = {}
+    lock['python_expat_provenance'] = json.loads(Path('/opt/os-backports/pyexpat/provenance.json').read_text())
     lock['os_backport_provenance'] = json.loads(Path('/opt/os-backports/provenance.json').read_text())
     for app in lock['apps']:
         name, sha = app['name'], app['sha']

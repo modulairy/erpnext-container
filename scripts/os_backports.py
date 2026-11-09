@@ -46,6 +46,14 @@ def prepare_source(name, source, work, resolved_at):
             lines[position:position] = [' _XimXTransSocket'+suffix+'Funcs@Base 2:1.8.14'
                 for suffix in ('INET6', 'INET', 'Local', 'TCP', 'UNIX')]
             symbols.write_text('\n'.join(lines)+'\n')
+    if name == 'sqlite3':
+        if source.get('build_tcl') != '9.0':
+            raise ValueError('Unreviewed SQLite build interpreter')
+        control, rules = root/'debian/control', root/'debian/rules'
+        if control.read_text().count('tcl9.1-dev') != 1 or rules.read_text().count('TCLV_SECONDARY = 9.1') != 1:
+            raise ValueError('SQLite packaging changed; review required')
+        control.write_text(control.read_text().replace('tcl9.1-dev', 'tcl9.0-dev'))
+        rules.write_text(rules.read_text().replace('TCLV_SECONDARY = 9.1', 'TCLV_SECONDARY = 9.0'))
     if patch := source.get('patch'):
         target = root/'debian/patches/container-CVE-2026-37555.patch'
         download(patch, target)
@@ -64,7 +72,7 @@ def prepare_source(name, source, work, resolved_at):
 def main():
     lock = json.loads(Path('/opt/build/lock.json').read_text())
     packages = lock['os_backports']
-    if set(packages) != {'acl', 'ncurses', 'perl', 'systemd', 'libsndfile', 'libx11', 'libxrender', 'libxtst'}:
+    if set(packages) != {'acl', 'ncurses', 'perl', 'systemd', 'libsndfile', 'libx11', 'libxrender', 'libxtst', 'expat', 'sqlite3', 'libxi'}:
         raise ValueError('Unreviewed OS backport set')
     # Binary dependencies always come from stable; sid is source-only.
     Path('/etc/apt/sources.list.d/backport-source.list').write_text(
@@ -76,19 +84,22 @@ def main():
     out.mkdir()
     build_out = Path('/build-deps')
     build_out.mkdir()
-    build_wanted = {'libx11': {'libx11-dev'}, 'libxrender': {'libxrender-dev'}}
+    build_wanted = {'libx11': {'libx11-dev'}, 'libxrender': {'libxrender-dev'},
+                    'expat': {'libexpat1-dev'}, 'sqlite3': {'libsqlite3-dev'}, 'libxi': {'libxi-dev'}}
     evidence = {}
     wanted = {'acl': {'libacl1'},
               'ncurses': {'libtinfo6', 'libncurses6', 'libncursesw6', 'ncurses-base', 'ncurses-bin'},
               'perl': {'perl', 'perl-base', 'perl-modules-5.42', 'libperl5.42'},
               'systemd': {'libsystemd0', 'libudev1'}, 'libsndfile': {'libsndfile1'},
               'libx11': {'libx11-6', 'libx11-data', 'libx11-xcb1'},
-              'libxrender': {'libxrender1'}, 'libxtst': {'libxtst6'}}
+              'libxrender': {'libxrender1'}, 'libxtst': {'libxtst6'},
+              'expat': {'libexpat1'}, 'sqlite3': {'libsqlite3-0'}, 'libxi': {'libxi6'}}
     for name, source in packages.items():
         version = source['version']
         work = Path('/source')/name
         work.mkdir(parents=True)
-        run('apt-get', 'build-dep', '-y', '--no-install-recommends', name+'='+version)
+        if name != 'sqlite3':
+            run('apt-get', 'build-dep', '-y', '--no-install-recommends', name+'='+version)
         run('apt-get', 'source', '--download-only', name+'='+version, cwd=work)
         for filename, digest in source['files'].items():
             if Path(filename).name != filename:
@@ -98,11 +109,15 @@ def main():
         dsc, = work.glob('*.dsc')
         run('dpkg-source', '-x', str(dsc), str(work/'build'))
         root = prepare_source(name, source, work, lock['resolved_at'])
+        if name == 'sqlite3':
+            run('apt-get', 'build-dep', '-y', '--no-install-recommends', str(root))
         run('chown', '-R', 'package-builder:package-builder', str(work))
         # Do not disable upstream/package tests with nocheck.
         # Debian's build helpers must use Debian Python and its packaged modules.
         env = dict(os.environ, PATH='/usr/sbin:/usr/bin:/sbin:/bin')
         run('runuser', '-u', 'package-builder', '--', 'dpkg-buildpackage', '-b', '-us', '-uc', '-j2', cwd=root, env=env)
+        if name == 'sqlite3':
+            run('runuser', '-u', 'package-builder', '--', 'make', '-C', str(root/'debian/8.6'), 'quicktest', cwd=root, env=env)
         installed = {}
         build_installed = {}
         for deb in work.glob('*.deb'):
