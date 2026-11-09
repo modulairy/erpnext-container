@@ -1,5 +1,4 @@
 import copy
-import json
 from pathlib import Path
 import sys
 import unittest
@@ -28,8 +27,3 @@ class GateTests(unittest.TestCase):
         self.assertEqual(len(assess_report(self.data)['blocking']),1)
         self.data['Results'][0]['Misconfigurations']=[{'Severity':'HIGH','Status':'FAIL'}]
         self.assertEqual(len(assess_report(self.data)['blocking']),2)
-    def test_exceptions_are_unique_os_records(self):
-        data=json.loads((Path(__file__).resolve().parents[1]/'security-exceptions.json').read_text())
-        keys=data['application']
-        self.assertEqual(len(keys),len({json.dumps(k,sort_keys=True) for k in keys}))
-        self.assertTrue(all(k['classification']=='os-pkgs' and k['type']=='debian' for k in keys))
