@@ -23,10 +23,11 @@ def policy(folder=None):
 def selected_patches(apps, folder=None):
     _, manifest = policy(folder)
     versions = {app['name']: app['version'] for app in apps}
-    for name, entry in manifest.items():
-        if versions.get(name) != entry['version']:
+    selected = {name: entry for name, entry in manifest.items() if name in versions}
+    for name, entry in selected.items():
+        if versions[name] != entry['version']:
             raise ValueError(f'Review compatibility patch for {name} {versions.get(name)}')
-    return manifest
+    return selected
 
 
 def apply_community(root, app, locked):

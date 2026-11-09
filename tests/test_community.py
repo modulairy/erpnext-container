@@ -12,6 +12,10 @@ from release import publish
 
 
 class CommunityTests(unittest.TestCase):
+    def test_frappe_only_selects_its_own_patch(self):
+        entries = selected_patches([{'name': 'frappe', 'version': '16.55.2'}])
+        self.assertEqual(set(entries), {'frappe'})
+
     def test_version_drift_blocks_before_build(self):
         with self.assertRaisesRegex(ValueError, 'Review compatibility patch'):
             selected_patches([{'name':'frappe','version':'17.0.0'}])
