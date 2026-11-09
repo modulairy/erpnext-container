@@ -1,9 +1,9 @@
 {
   "schema": 2,
-  "key": "2a92f6102ab823484fd751936479824a7abf12e0456bd40546ee2f408297f900",
+  "key": "7da0aafe83f2391c182c0b297f71321a0dcc94a8e1feb3605abfbed32f32f371",
   "images": {
-    "builder": "ghcr.io/modulairy/erpnext-base@sha256:05d8683fe63edcdc82d2022b72411f620944751e5b2cc0e3813ed9b90336eaf1",
-    "runtime": "ghcr.io/modulairy/erpnext-base@sha256:9deb58f0cb5214088c039fc1dc51b4bb08ca7d1cf2827ff4022d0e577adc37ef"
+    "builder": "ghcr.io/modulairy/erpnext-base@sha256:19cc356fdc9a31c0418e83785cf32b49500a2f8862c5487d37d6cc02277117ed",
+    "runtime": "ghcr.io/modulairy/erpnext-base@sha256:b7b6976e128b02b3b42e748c86cfbb465f1ddad6ff8be6f1a07f42316c54a740"
   },
   "inputs": {
     "python": "3.14.10",
@@ -189,7 +189,18 @@
     "redis_image": "redis:8-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80"
   },
   "security": {
-    "status": "pending"
+    "status": "passed",
+    "severity": [
+      "HIGH",
+      "CRITICAL"
+    ],
+    "policy_sha256": "ae6ce4dd76a0471d75eea3f24e08ab7d1e909d6782eff3b4af9d0150cbeea687",
+    "reports": {
+      "runtime": "181ad9ca93877e21e8242a3232c123693331aa6dba272fdb497f73d172a15cf2",
+      "builder": "cb24c80d38682161588192c430082cf188ba6c20945da35a82af06969dd4a93a"
+    },
+    "trivy_image": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "grype_image": "anchore/grype:v0.121.2@sha256:6a36234da13f9faa327306ac0b3dab3405cfa2b4eb20c8f904125a8707863913"
   },
   "bootstrap": {
     "pip": {
@@ -202,5 +213,11 @@
       "url": "https://registry.npmjs.org/npm/-/npm-11.21.2.tgz",
       "integrity": "sha512-7HPApk+AflMUavSseL1Pm6CnYqMIHk53x+KmuhqmTDqPkjPMgxIpTPcTqsE91EKNw4gFBJV9fnXiSdGm1DXq9A=="
     }
-  }
+  },
+  "parents": {
+    "builder": "ghcr.io/modulairy/erpnext-base@sha256:05d8683fe63edcdc82d2022b72411f620944751e5b2cc0e3813ed9b90336eaf1",
+    "runtime": "ghcr.io/modulairy/erpnext-base@sha256:9deb58f0cb5214088c039fc1dc51b4bb08ca7d1cf2827ff4022d0e577adc37ef"
+  },
+  "source_revision": "8a3cca2c2d3f6997255e95b8e1ea0d22c39daacb",
+  "evidence": "https://github.com/modulairy/erpnext-container/actions/runs/42621803428"
 }
