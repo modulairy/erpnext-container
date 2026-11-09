@@ -19,11 +19,12 @@ def policy_hash(root=ROOT):
     return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
 
-def validate(data, require_verified=True):
+def validate(data, require_verified=True, local=False):
     if data.get('schema') != 2 or set(data.get('images', {})) != {'runtime', 'builder'}:
         raise ValueError('Missing approved base manifest; run the base Action manually')
     for image in data['images'].values():
-        if not re.fullmatch(re.escape(BASE_IMAGE)+r'@sha256:[0-9a-f]{64}', image):
+        pattern = r'sha256:[0-9a-f]{64}' if local and not require_verified else re.escape(BASE_IMAGE)+r'@sha256:[0-9a-f]{64}'
+        if not re.fullmatch(pattern, image):
             raise ValueError('Approved base references must be immutable GHCR digests')
     if set(data.get('inputs', {})) != set(BASE_FIELDS):
         raise ValueError('Missing locked base runtime inputs')

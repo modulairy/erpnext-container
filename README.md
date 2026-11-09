@@ -4,7 +4,7 @@ Two manual Actions build one complete application image on a separately prepared
 
 | Action | Purpose |
 | --- | --- |
-| **ERPNext base images** | Build and scan the OS bases; on main, select their approved immutable digests. |
+| **ERPNext base images** | Build and scan the OS bases locally on the runner; enable `publish` on main to push and select approved digests. |
 | **Community ERPNext** | Use the approved bases, install all applications, test and scan. Enable `publish` on main to publish GHCR, tag and Release. |
 
 No push, PR, release or scheduled build triggers are configured. Application builds never invoke or rebuild the base. Previously published Frappe-only images remain available, but this repository no longer builds that separate profile.
@@ -92,6 +92,6 @@ python scripts/pipeline.py integration
 python scripts/pipeline.py scan
 ```
 
-Base preparation is separate: `bash scripts/base-image.sh` requires `GHCR_USER`, `GHCR_TOKEN` and `GITHUB_SHA`, then `python scripts/pipeline.py scan-base` verifies the result. Use the manual Action to select verified digests on main. Never invoke base preparation from application builds.
+Base preparation is separate: `bash scripts/base-image.sh` requires `GITHUB_SHA`, then `python scripts/pipeline.py scan-base` verifies the result. By default images stay on the runner. Set `BASE_PUBLISH=true`, `GHCR_USER` and `GHCR_TOKEN` only for publication; use the manual Action with `publish` enabled on main to select verified digests. Local validation image IDs cannot be promoted to the approved manifest. Never invoke base preparation from application builds.
 
 Upstream application licenses remain applicable to bundled sources.

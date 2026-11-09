@@ -48,6 +48,7 @@ def config():
 
 def base():
     lock = load()
+    publish = os.environ.get('BASE_PUBLISH') == 'true'
     context = OUT/'base'
     context.mkdir(parents=True, exist_ok=True)
     inputs = {name: lock[name] for name in BASE_FIELDS}
@@ -57,17 +58,19 @@ def base():
     # Always use Docker's layer cache; only this manual command creates bases.
     for kind in ('builder', 'runtime'):
         metadata = context/(kind+'-metadata.json')
-        run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push',
+        tag = BASE_IMAGE+':'+kind+'-'+os.environ['GITHUB_SHA']
+        run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--push' if publish else '--load',
              '--build-context', f'resolved={context}', '--file', 'Containerfile.base',
-             '--target', kind+'-base', '--tag', BASE_IMAGE+':'+kind+'-'+os.environ['GITHUB_SHA'],
+             '--target', kind+'-base', '--tag', tag,
              '--metadata-file', str(metadata),
              '--build-arg', 'PYTHON_IMAGE='+lock['python_image'],
              '--build-arg', 'NODE_IMAGE='+lock['node_image'],
              '--build-arg', 'YARN_VERSION='+lock['yarn'], '.'])
-        digest = json.loads(metadata.read_text())['containerimage.digest']
+        digest = (json.loads(metadata.read_text())['containerimage.digest'] if publish else
+                  subprocess.check_output(['docker', 'image', 'inspect', tag, '--format', '{{.Id}}'], text=True).strip())
         if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
             raise ValueError('Invalid published base digest')
-        images[kind] = BASE_IMAGE+'@'+digest
+        images[kind] = BASE_IMAGE+'@'+digest if publish else digest
         smoke_base(images[kind], kind)
     data = {'schema': 2, 'images': images, 'inputs': inputs,
             'verification_inputs': {name: lock[name] for name in
@@ -290,7 +293,8 @@ def scan_base():
     from base_manifest import validate, policy_hash
     root = OUT
     lock = load()
-    metadata = validate(json.loads((OUT/'base-images.json').read_text()), require_verified=False)
+    metadata = validate(json.loads((OUT/'base-images.json').read_text()), require_verified=False,
+                        local=os.environ.get('BASE_PUBLISH') != 'true')
     cache = 'base-scan-'+secrets.token_hex(4)
     run(['docker', 'volume', 'create', cache])
     reports, failed = {}, []

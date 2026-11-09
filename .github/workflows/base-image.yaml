@@ -2,6 +2,12 @@ name: ERPNext base images
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish verified bases and select them on main
+        type: boolean
+        default: false
+        required: true
 
 permissions:
   contents: read
@@ -9,6 +15,9 @@ permissions:
 defaults:
   run:
     shell: bash
+
+env:
+  BASE_PUBLISH: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
 
 concurrency:
   group: erpnext-base-${{ github.repository }}
@@ -33,7 +42,7 @@ jobs:
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
           bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
-      - name: Build GHCR base images
+      - name: Build base images
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GHCR_TOKEN: ${{ github.token }}
@@ -42,7 +51,7 @@ jobs:
       - name: Verify base images with the shared security gate
         run: python scripts/pipeline.py scan-base
       - name: Select verified immutable base manifest
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/base_manifest.py

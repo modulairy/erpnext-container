@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${GHCR_USER:?Set GHCR_USER for GHCR authentication}"
-: "${GHCR_TOKEN:?Set GHCR_TOKEN for GHCR authentication}"
 python_bin="${WORKSPACE_PYTHON:-}"
 if [[ -z "$python_bin" ]]; then
     for candidate in python3 python; do
@@ -20,8 +18,12 @@ if [[ -z "$python_bin" ]] ||
 fi
 out="${BUILD_DIR:-.build}"
 mkdir -p "$out"
-printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-trap 'docker logout ghcr.io' EXIT
+if [[ "${BASE_PUBLISH:-false}" == "true" ]]; then
+    : "${GHCR_USER:?Set GHCR_USER for GHCR authentication}"
+    : "${GHCR_TOKEN:?Set GHCR_TOKEN for GHCR authentication}"
+    printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+    trap 'docker logout ghcr.io' EXIT
+fi
 "$python_bin" scripts/resolve.py --base 2>&1 | tee "$out/resolve.log"
 "$python_bin" scripts/pipeline.py config
 "$python_bin" scripts/pipeline.py base
