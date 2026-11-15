@@ -51,7 +51,7 @@ def install(kind):
                         'import ensurepip; assert ensurepip.version()=="26.3"'], check=True)
         if kind == 'builder':
             npm = config['npm']
-            if npm['version'] != '11.21.2' or npm['url'] != 'https://registry.npmjs.org/npm/-/npm-11.21.2.tgz':
+            if npm['version'] != '12.2.2' or npm['url'] != 'https://registry.npmjs.org/npm/-/npm-12.2.2.tgz':
                 raise ValueError('Unreviewed npm bootstrap artifact')
             archive = work/'npm.tgz'
             download(npm, archive)

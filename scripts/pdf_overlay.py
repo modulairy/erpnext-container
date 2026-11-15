@@ -123,10 +123,7 @@ def get_pdf(print_format, html, options, output, pdf_generator=None):
     if old not in text:
         raise ValueError('Review upstream Browser print format lookup')
     text = text.replace(old, '(bool(print_format) and '+old+')')
-    text = text.replace('self.header_height = self.header_page.get_element_height()',
-                        'self.header_height = self.header_page.get_element_height()\n\t\t\tif not self.is_print_designer:\n\t\t\t\toptions.setdefault("margin-top", "15mm")')
-    text = text.replace('self.footer_height = self.footer_page.get_element_height()',
-                        'self.footer_height = self.footer_page.get_element_height()\n\t\t\tif not self.is_print_designer:\n\t\t\t\toptions.setdefault("margin-bottom", "15mm")')
+    # Frappe 16.56 handles header/footer and small-page margins in prepare_options_for_pdf.
     marker = '\t\tupdated_options["paperWidth"] = convert_uom(options["page-width"], "px", "in", only_number=True)'
     if marker not in text:
         raise ValueError('Review upstream Chromium orientation handling')

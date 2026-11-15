@@ -61,6 +61,69 @@ def setup():
     print('PASS: site creation, all applications installed, migration, scheduler enabled', flush=True)
 
 
+def verify_app_pages(session, base):
+    import frappe
+    import requests
+    from builder.utils import Block
+    from wiki.frappe_wiki.doctype.wiki_change_request.wiki_change_request import (
+        create_change_request, create_cr_page, merge_change_request, update_cr_page,
+    )
+    suffix = frappe.generate_hash(length=8)
+    route = 'container-builder-'+suffix
+    def blocks(text):
+        return Block(element='div', originalElement='body',
+                     children=[Block(element='h1', innerHTML=text)]).as_json(wrap_in_array=True)
+    page = frappe.get_doc({'doctype': 'Builder Page', 'page_title': 'Container Builder',
+                          'route': route, 'draft_blocks': blocks('Builder initial '+suffix)}).insert()
+    page.publish()
+    frappe.db.commit()
+    response = requests.get(base+'/'+route, headers={'Host': SITE}, timeout=30)
+    response.raise_for_status()
+    assert 'Builder initial '+suffix in response.text
+    page.draft_blocks = blocks('Builder updated '+suffix)
+    page.save()
+    page.publish()
+    frappe.db.commit()
+    response = requests.get(base+'/'+route, headers={'Host': SITE}, timeout=30)
+    response.raise_for_status()
+    assert 'Builder updated '+suffix in response.text
+    response = session.get(base+'/builder', timeout=30)
+    response.raise_for_status()
+    assert 'text/html' in response.headers['Content-Type']
+    assert '/assets/builder/' in response.text
+    page.unpublish()
+    frappe.db.commit()
+    response = requests.get(base+'/'+route, headers={'Host': SITE}, timeout=30)
+    assert response.status_code == 404 and 'Builder updated '+suffix not in response.text
+    space = frappe.get_doc({'doctype': 'Wiki Space', 'space_name': 'Container Wiki '+suffix,
+                            'route': 'container-wiki-'+suffix, 'is_published': 1,
+                            'roles': [{'role': 'Guest', 'permission_level': 'Read'}]}).insert()
+    creation = create_change_request(space.name, 'Container acceptance creation')
+    root_key = frappe.db.get_value('Wiki Document', space.root_group, 'doc_key')
+    page_key = create_cr_page(creation.name, root_key, 'Container wiki page',
+                             content='Wiki initial '+suffix)
+    frappe.db.set_value('Wiki Change Request', creation.name, 'status', 'Approved')
+    merge_change_request(creation.name)
+    document = frappe.get_doc('Wiki Document', {'doc_key': page_key})
+    change = create_change_request(space.name, 'Container acceptance update')
+    update_cr_page(change.name, document.doc_key, {'content': 'Wiki updated '+suffix})
+    frappe.db.set_value('Wiki Change Request', change.name, 'status', 'Approved')
+    merge_change_request(change.name)
+    document.reload()
+    assert document.content == 'Wiki updated '+suffix
+    frappe.db.commit()
+    response = requests.get(base+'/'+document.route, headers={'Host': SITE}, timeout=30)
+    response.raise_for_status()
+    assert 'Wiki updated '+suffix in response.text
+    space.reload()
+    space.set('roles', [{'role': 'System Manager', 'permission_level': 'Read'}])
+    space.save()
+    frappe.db.commit()
+    response = requests.get(base+'/'+document.route, headers={'Host': SITE}, timeout=30, allow_redirects=False)
+    assert response.status_code in (302, 403, 404) and 'Wiki updated '+suffix not in response.text
+    print('PASS: Builder create/edit/publish/unpublish and editor route; Wiki change-request merge, public read and private-space isolation', flush=True)
+
+
 def verify():
     if LOCK.get('profile') != 'frappe':
         command('node', '/tests/zod_test.cjs')
@@ -202,6 +265,8 @@ def verify():
     response.raise_for_status()
     # All three queue roles must execute an actual job, not merely start a process.
     print('PASS: authenticated API CRUD and application inventory', flush=True)
+    if LOCK.get('profile') != 'frappe':
+        verify_app_pages(session, base)
     from pdf_test import verify_pdf, verify_frappe_pdf
     (verify_frappe_pdf if LOCK.get('profile') == 'frappe' else verify_pdf)(session, base)
     from cache_test import verify_cache

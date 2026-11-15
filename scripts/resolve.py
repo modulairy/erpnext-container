@@ -277,7 +277,7 @@ def os_backports():
     url = 'https://deb.debian.org/debian/dists/sid/main/source/Sources.xz'
     index = lzma.decompress(request(url)).decode()
     reviewed = {'acl': '2.4.0-1', 'ncurses': '6.6+20260608-2',
-                'perl': '5.42.3-1', 'systemd': '262.2-1', 'libsndfile': '1.2.2-4',
+                'perl': '5.44.0-3', 'systemd': '262.2-1', 'libsndfile': '1.2.2-4',
                 'libx11': '2:1.8.14-1', 'libxrender': '1:0.9.13-1', 'libxtst': '2:1.2.6-1',
                 'expat': '2.10.0-1', 'sqlite3': '3.54.1-2', 'libxi': '2:1.8.4-1'}
     result = {}
@@ -362,7 +362,7 @@ def runtime_inputs(rows, out, base_build):
               'os_backports': os_backports(),
               'chromium': json.loads((Path(__file__).resolve().parents[1]/'resources/chromium.json').read_text()),
               'pyexpat_sources': pyexpat_sources(python)}
-    return inputs, image_digest(f'aquasec/trivy:{scanner_version().lstrip("v")}'), image_digest('anchore/grype:v0.121.2')
+    return inputs, image_digest(f'aquasec/trivy:{scanner_version().lstrip("v")}'), image_digest('anchore/grype:v0.121.3')
 
 
 def main():

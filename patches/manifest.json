@@ -1,17 +1,17 @@
 {
   "frappe": {
-    "version": "16.55.2",
+    "version": "16.56.0",
     "upstream_pr": "https://github.com/frappe/frappe/pull/44199",
-    "upstream_revision": "3d1284c5fdb52207a516a49bbf2fd186cb43b3ab",
+    "upstream_revision": "49789a1711d4dde2be9c6888efe35651465f4b64",
     "patch": "frappe.patch",
     "sha256": "1081ebd0d83fa41e2cc7d428745871c665247efe793c269348f2b14debf23d3e",
     "expected": {
       "frappe/config.py": "70047184964bd113ff99e5e91eac0f4233299a65254c950b42a0bf3d8a87aab0",
-      "frappe/utils/__init__.py": "b4e95c7a298f97f0bb02b48b9e696212665a568ad2a981ddd427335a50679e92"
+      "frappe/utils/__init__.py": "2dd12e9a6abff0b9863d4acf4b8b49f7a2898cc28f028ea5c9d54462f94ae299"
     },
     "output": {
       "frappe/config.py": "1a4dd5affaeb9884ff04f4a1e20eafcbdde1415d039fec6496af3baa59ee2aeb",
-      "frappe/utils/__init__.py": "4985c074301b580c016204fc4f115c091281c58558a4b62bf878a7e9caa486b8"
+      "frappe/utils/__init__.py": "9cee3caaeddf059ecf41429f97f6aae57049c9ba24d05ad10eaaae278096c0e3"
     }
   },
   "helpdesk": {
