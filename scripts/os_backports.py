@@ -105,7 +105,7 @@ def main():
     evidence = {}
     wanted = {'acl': {'libacl1'},
               'ncurses': {'libtinfo6', 'libncurses6', 'libncursesw6', 'ncurses-base', 'ncurses-bin'},
-              'perl': {'perl', 'perl-base', 'perl-modules-5.42', 'libperl5.42'},
+              'perl': {'perl', 'perl-base', 'perl-modules-5.44', 'libperl5.44'},
               'systemd': {'libsystemd0', 'libudev1'}, 'libsndfile': {'libsndfile1'},
               'libx11': {'libx11-6', 'libx11-data', 'libx11-xcb1'},
               'libxrender': {'libxrender1'}, 'libxtst': {'libxtst6'},
@@ -133,7 +133,12 @@ def main():
         env = dict(os.environ, PATH='/usr/sbin:/usr/bin:/sbin:/bin')
         run('runuser', '-u', 'package-builder', '--', 'dpkg-buildpackage', '-b', '-us', '-uc', '-j2', cwd=root, env=env)
         if name == 'sqlite3':
-            run('runuser', '-u', 'package-builder', '--', '/usr/bin/tclsh8.6', str(root/'test/testrunner.tcl'), 'mdevtest', '--jobs', '2', cwd=root/'debian/8.6', env=env)
+            runner = ['runuser', '-u', 'package-builder', '--', '/usr/bin/tclsh8.6', str(root/'test/testrunner.tcl')]
+            try:
+                run(*runner, 'mdevtest', '--jobs', '2', cwd=root/'debian/8.6', env=env)
+            except subprocess.CalledProcessError:
+                subprocess.run([*runner, 'errors', '--verbose'], cwd=root/'debian/8.6', env=env, check=False)
+                raise
         installed = {}
         build_installed = {}
         for deb in work.glob('*.deb'):

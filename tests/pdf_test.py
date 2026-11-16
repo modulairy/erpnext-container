@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import time
 
 
 def verify_sandbox():
@@ -23,11 +24,17 @@ def verify_sandbox():
     client = CDPSocketClient(generator._devtools_url)
     try:
         client.connect()
-        target, error = client.send('Target.createTarget', {'url': 'about:blank'})
+        target, error = client.send('Target.createTarget', {'url': 'data:text/html,<h1>Sandbox probe</h1>'})
         assert not error
-        processes, error = client.send('SystemInfo.getProcessInfo')
-        assert not error
-        renderers = [p for p in processes['processInfo'] if p['type'] == 'renderer']
+        # Target creation acknowledges before the renderer process is ready.
+        deadline = time.monotonic()+15
+        while True:
+            processes, error = client.send('SystemInfo.getProcessInfo')
+            assert not error
+            renderers = [p for p in processes['processInfo'] if p['type'] == 'renderer']
+            if renderers or time.monotonic() >= deadline:
+                break
+            time.sleep(0.05)
         assert renderers, processes
         import psutil
         sandbox = []
@@ -172,6 +179,14 @@ def verify_renderer(folder):
         assert 'Container letterhead' in text and f'Page {number} of 2' in text, text
     wide = '<html><body><div style="width:1800px">Wide report</div></body></html>'
     assert get_pdf(wide, smart_shrinking=True).startswith(b'%PDF-')
+    label = get_pdf('<html><body>Small label</body></html>',
+                    options={'page-width': '25mm', 'page-height': '25mm'})
+    (folder/'small-label.pdf').write_bytes(label)
+    reader = PdfReader(io.BytesIO(label))
+    label_text = ' '.join(reader.pages[0].extract_text().split())
+    assert 'Small label' in label_text, label_text
+    assert 70 < reader.pages[0].mediabox.width < 72
+    assert 70 < reader.pages[0].mediabox.height < 72
     css = Path(frappe.get_site_path('public/files/pdf-test.css'))
     css.write_text('p::after { content: " LOCAL_ASSET_OK"; }')
     try:
