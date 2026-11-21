@@ -1,6 +1,6 @@
 --- a/helpdesk/hooks.py
 +++ b/helpdesk/hooks.py
-@@ -25,17 +25,19 @@
+@@ -29,19 +29,19 @@
  after_migrate = [
      "helpdesk.search.build_index_in_background",
      "helpdesk.search.download_corpus",
@@ -10,7 +10,9 @@
  # Full Text Search
  # ------------------
  
--sqlite_search = ["helpdesk.search_sqlite.HelpdeskSearch"]
+-sqlite_search = [
+-    "helpdesk.search_sqlite.HelpdeskSearch",
+-]
 +persistent_cache_keys = ["search_doc:*", "search_doc_sections:*", "helpdesk_ticket_search:*"]
  
  scheduler_events = {
@@ -21,8 +23,8 @@
      ],
      "daily": [
          "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days"
-@@ -74,6 +76,11 @@
- }
+@@ -131,6 +131,11 @@
+ update_website_context = "helpdesk.helpdesk.hooks.studio_app.update_website_context"
  
  doc_events = {
 +    "*": {
@@ -909,3 +911,4 @@
 +        frappe.delete_doc("HD Ticket", ticket.name, force=True)
 +        backend.remove_doc("HD Ticket", ticket.name)
 +        self.assertEqual(backend.search("replacement" + token)["results"], [])
+
