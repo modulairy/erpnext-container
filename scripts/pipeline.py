@@ -337,7 +337,9 @@ def scan_with_cache(cache):
     components = sbom.setdefault('components', [])
     if not any(item.get('purl') == chrome_component['purl'] for item in components):
         components.append(chrome_component)
-    sbom_path.write_text(json.dumps(sbom, indent=2)+'\n', encoding='utf-8')
+    updated_sbom = OUT/'sbom.updated.cdx.json'
+    updated_sbom.write_text(json.dumps(sbom, indent=2)+'\n', encoding='utf-8')
+    updated_sbom.replace(sbom_path)
     checks = [
         ['image', '--input', '/scan/image.tar', '--scanners', 'vuln,secret', '--severity', 'HIGH,CRITICAL',
          '--exit-code', '0', '--format', 'json', '--output', '/scan/vulnerabilities.json'],
