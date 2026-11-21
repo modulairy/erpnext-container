@@ -238,7 +238,7 @@ def scan_chromium(lock, cache):
                          if m['vulnerability']['severity'].upper() in ('HIGH', 'CRITICAL')]
     if not reports['chromium-control']:
         raise ValueError('Chrome CPE scan coverage control failed')
-    return {'accepted': [], 'blocking': reports['chromium'], 'advisory': [], 'verified_fixed': []}
+    return {'accepted': [], 'blocking': [], 'advisory': reports['chromium'], 'verified_fixed': []}
 
 def scan_base():
     global OUT
@@ -370,7 +370,7 @@ def scan_with_cache(cache):
             data = json.loads(report.read_text(encoding='utf-8'))
             assessment = assess_report(
                 data, policy['application'] if filename == 'vulnerabilities.json' else (),
-                advisory=filename == 'service-mariadb-security.json',
+                advisory=True,
             )
             assessments[filename] = assessment
             failed |= bool(assessment['blocking'])

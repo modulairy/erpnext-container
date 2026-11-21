@@ -8,6 +8,10 @@ on:
         type: boolean
         default: false
         required: true
+      expected_erpnext_tag:
+        description: Stop if the resolver selects a different ERPNext release
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -42,10 +46,18 @@ jobs:
       - name: Resolve apps against the approved ready base
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_ERPNEXT_TAG: ${{ inputs.expected_erpnext_tag }}
         run: |
           set -euo pipefail
           mkdir -p .build
           python scripts/resolve.py 2>&1 | tee .build/resolve.log
+          if [[ -n "$EXPECTED_ERPNEXT_TAG" ]]; then
+            actual=$(jq -er '.erpnext_tag' .build/lock.json)
+            if [[ "$actual" != "$EXPECTED_ERPNEXT_TAG" ]]; then
+              printf 'Expected ERPNext %s, resolved %s\n' "$EXPECTED_ERPNEXT_TAG" "$actual" >&2
+              exit 1
+            fi
+          fi
       - name: Authenticate base image pulls
         env:
           GHCR_TOKEN: ${{ github.token }}

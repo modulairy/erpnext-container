@@ -18,7 +18,7 @@ In **Actions > Community ERPNext > Run workflow**, choose a branch and leave `pu
 
 Every build is followed by an isolated site installation and migration for every included app, HTTP/login/API CRUD checks, static asset requests, websocket connectivity, real jobs on all three worker queues and runtime process checks. MariaDB and Redis are temporary test services, with generated credentials and no production access. Reports and sanitized logs are retained for 14 days. Temporary containers, networks and volumes are removed on completion/failure.
 
-Trivy scans the image's OS/language dependencies and secrets, and the repository's configuration and secrets. Unaccepted HIGH/CRITICAL findings, scanner errors or failed tests block publication. `security-exceptions.json` records owner-accepted application findings by exact CVE, package, installed version, severity and scanner type. These are accepted risks, not fixes; a changed version or new finding requires review. Raw reports retain all findings, and `gate-security.json` distinguishes accepted, advisory and blocking results. SBOM and provenance attestations accompany publication. Passing smoke tests is not a guarantee that every application feature is covered.
+Trivy scans OS and language dependencies, secrets and repository configuration. Package and browser CVEs are advisory. High and critical secret and configuration findings, scanner errors and failed tests block publication. Raw reports and `gate-security.json` retain the findings. Publication includes SBOM and provenance attestations.
 
 `security-policy.json` defines reviewed dependency update ranges. Each run selects stable versions from PyPI/npm, applies explicit source overlays before installation and frontend compilation, and records the changes in the image lock. These overlays intentionally differ from upstream dependency pins; image-codec, PDF-reader, file-lock and GitPython checks supplement integration tests. A newer upstream requirement that would be downgraded stops the build for policy review.
 
@@ -41,7 +41,7 @@ After a successful push and provenance/SBOM attestations, the publish job create
 
 **Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the approved ready base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
 
-The bases replace Debian Chromium with the SHA-256-pinned Google Chrome Headless Shell. The product scan requires its coverage control and blocks high and critical findings for the installed version.
+The bases replace Debian Chromium with the SHA-256-pinned Google Chrome Headless Shell. The product scan reports high and critical findings for the installed version and blocks on scanner or coverage-control failures.
 
 ## Official base images
 
