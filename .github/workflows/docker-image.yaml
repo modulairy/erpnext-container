@@ -38,7 +38,7 @@ jobs:
         run: |
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
-          bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
+          bash -n resources/start.sh
       - name: Resolve apps against the approved ready base
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -71,9 +71,6 @@ jobs:
             .build/image-lock.json
             .build/base-images.json
             .build/installed-packages.json
-            .build/package-integrity.json
-            .build/source-fixes.json
-            .build/vendor-assessment.json
             .build/chromium*.json
             .build/*.log
             .build/*security.json

@@ -24,17 +24,15 @@ Trivy scans the image's OS/language dependencies and secrets, and the repository
 
 npm/Yarn are confined to the builder; pip and esbuild compiler packages are removed from the final runtime after installation and asset generation. Add or update dependencies through a rebuilt image. Other node_modules are retained because public asset symlinks serve some files directly; their package metadata remains available to the scanner. MariaDB and Redis image digests are also scanned separately. External MariaDB vulnerabilities are advisory by owner decision; Redis vulnerabilities remain blocking. Scanner errors and secret findings remain blocking for both services.
 
-Security overlays update direct dependency declarations as well as Yarn resolutions. Upstream Yarn locks are regenerated within the reviewed ranges, and installed package versions are checked before asset compilation. Explicit major migrations are listed in the policy and must pass the same build and runtime tests. MariaDB client libraries inside the ERPNext image use the newest common 11.8 patch from MariaDB's signed Debian 13 repository; the external MariaDB service remains an official image and has a separate vulnerability report.
+Security overlays update direct dependency declarations as well as Yarn resolutions. Upstream Yarn locks are regenerated within the reviewed ranges, and installed package versions are checked before asset compilation. Explicit major migrations are listed in the policy and must pass the same build and runtime tests. MariaDB client libraries come from the official Frappe runtime. The external MariaDB service has a separate vulnerability report.
 
 Plyr stays on 3.7.8 because 3.8 changes the deep import used by this Frappe release. Helpdesk uses the patched Vite 7 line because Vite 8 rejects duplicate imports in its current source. Other applications use Vite 8. Wiki's Tiptap packages are aligned at 3.34.0 to keep their core, ProseMirror and extension peer requirements consistent. Revisiting these compatibility limits requires a successful frontend build.
 
 Curl library packages use the newest common version from signed Debian 13 backports. The installed MariaDB client and curl versions are checked against the image lock during integration tests.
 
-Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard rejects new adapter consumers; runtime tests exercise the actual email and phone validators. ACL 2.4.0, ncurses 6.6, Perl 5.44.0 and systemd 262.2 source packages are rebuilt against Debian 13 in an isolated stage, with package tests enabled. Only the selected runtime packages are installed, including systemd's client libraries rather than its daemon. Signed Debian source indexes and locked source SHA256 values protect the inputs; source and binary provenance is retained in the image lock. These reviewed source versions fail closed if unavailable. No unstable binary repository is installed. A backported fix can still be reported by the distribution security feed; those findings remain visible and block unless their exact record is explicitly accepted.
+Helpdesk uses Zod 4 with its unused Zod 3 adapter removed. A source guard rejects new adapter consumers; runtime tests exercise the actual email and phone validators.
 
-The same stage packages upstream libX11 1.8.14, libXrender 0.9.13 and libXtst 1.2.6 with their locked Debian packaging and applies the reviewed libsndfile CVE-2026-37555 patch. Upstream archives and the patch have pinned SHA256 values; custom package versions use `+container1`. Strict symbol checks stay enabled. Integration tests load the X libraries and exercise libsndfile's real WAV IMA-ADPCM overflow path with a sparse metadata fixture, alongside the Chromium PDF tests.
-
-The application build job has only package read permission. A separate base-image job has package write permission for the shared dependency images. Only a successful run can transfer the exact tested image to the main-only publish job; it verifies the image ID and pushes without rebuilding.
+The application build job pulls the public, approved Frappe digests. Only a successful run can transfer the exact tested image to the main-only publish job, which verifies the image ID and pushes without rebuilding.
 
 After a successful push and provenance/SBOM attestations, the publish job creates a Git tag and GitHub Release containing the image digest, source revision, locked applications and Actions evidence. The first release uses the ERPNext tag; rebuilding that ERPNext version from a different source revision uses `<ERPNext-tag>-<7-character-commit-SHA>`. Existing source tags are never moved. The GHCR tag remains the ERPNext tag. Only the publish job has the repository write permission needed for tags/releases. Logout runs last, including on failure.
 
@@ -43,25 +41,17 @@ After a successful push and provenance/SBOM attestations, the publish job create
 
 **Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the approved ready base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
 
-The runtime uses a version/hash-pinned official Chrome for Testing headless shell. A separate pinned Grype product scan must detect a known affected Chrome control and find no high/critical issues in the selected release. Raw results are retained. Reviewed Debian source fixes pass only when the official fixed version, locked source hashes, installed package version and package integrity agree; unmatched findings remain blocking. Python's pyexpat and ElementTree modules are rebuilt from the exact CPython source against the reviewed Expat and verified in the installed image.
+The browser comes from the official Frappe runtime. The product scan still requires its coverage control and blocks high and critical findings for the selected version.
 
-## Shared base images
+## Official base images
 
-`Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Runtime starts from the official Python slim image and contains Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder starts from a digest-pinned official Frappe build image with matching Python and Node versions. Its compilers and package managers stay in the build stages.
-
-**Actions > ERPNext base images > Run workflow** on `main` is the only way to create or rebuild the base. Leave `rebuild` disabled to verify and select the exact ready digests already recorded in the manifest, with no runtime resolution or compilation; enable it explicitly to resolve new runtime inputs and rebuild. Both base images must pass native smoke checks and the same HIGH/CRITICAL security gate, approved exact exceptions and verified-source rules used by applications. Raw reports are retained. The owner-approved exact 68 build-only records in `security-builder-advisories.json` are advisory only for the reviewed builder parent, package versions and vulnerability IDs; unmatched findings and secrets block. Runtime/Frappe use the same production gate without these builder advisories. CVE-2025-47273 is classified as not affected only after the reviewed official pip wheel and installed files match and the vulnerable setuptools module is absent.
-
-Select `refresh_bootstrap` (with `rebuild` disabled) to update only hash-locked pip/ensurepip and the compatible npm 12 patch on the selected ready images. This uses `Containerfile.base-maintenance` and never compiles OS sources. The two update operations are mutually exclusive.
-
-After successful verification, the manual base workflow updates only `resources/base-images.json` on `main` with the immutable runtime/builder digests, locked runtime inputs and verification evidence. A concurrent main update stops manifest publication instead of overwriting work.
-
-Frappe and ERPNext runs read this manifest directly. They never call the base workflow, compare base source hashes or rebuild a base. Python, Node, Yarn and OS inputs come from the selected base; Bench and application sources are resolved against those versions. A missing approved manifest or incompatible runtime stops the application run and requires a manual base update. Re-running an application cannot update the selected base.
+The manual base workflow resolves Linux amd64 digests of `frappe/build:version-16` and `frappe/base:version-16`. It checks that their runtime versions match, scans both images and records their inventories. Only an approved result can update the base manifest on main. Frappe and ERPNext consume the approved digests and keep the application source patches.
 
 ## Reviewed Frappe 16 backports
 
-`patches/manifest.json` records the source revisions, input/output file hashes and patch checksums for the opt-in [Frappe symlink discovery change](https://github.com/frappe/frappe/pull/44199) and [Helpdesk Redis ticket search](https://github.com/frappe/helpdesk/pull/3914). These are container backports, not upstream-merged features. They are reviewed for Frappe 16.56.0 and Helpdesk 16.1.0. Resolution/build fails on an unreviewed version or changed source instead of omitting a patch. Applied provenance is recorded in `image-lock.json`.
+`patches/manifest.json` records the source revisions, input/output file hashes and patch checksums for the opt-in [Frappe symlink discovery change](https://github.com/frappe/frappe/pull/44199) and [Helpdesk Redis ticket search](https://github.com/frappe/helpdesk/pull/3914). These are container backports, not upstream-merged features. They are reviewed for Frappe 16.60.2 and Helpdesk 16.2.1. Resolution/build fails on an unreviewed version or changed source instead of omitting a patch. Applied provenance is recorded in `image-lock.json`.
 
-Symlink site discovery is disabled by default. Set `allow_symlink_sites: true` in `common_site_config.json` or set `FRAPPE_ALLOW_SYMLINK_SITES=true`; ENV wins, including explicit false. Only configured directory targets are included. Backend, scheduler, workers and frontend must share the same readable target paths. Manage site directories and links as trusted operator configuration; aliases of one database are not separate tenants. HTTP cache discovery honors the same opt-in setting; restart frontend after configuration or link changes.
+Symlink site discovery is disabled by default. Set `allow_symlink_sites: true` in `common_site_config.json` or set `FRAPPE_ALLOW_SYMLINK_SITES=true`; ENV wins, including explicit false. Only configured directory targets are included. Backend, scheduler, workers and frontend must share the same readable target paths. Manage site directories and links as trusted operator configuration; aliases of one database are not separate tenants.
 
 Ticket search defaults to SQLite. To opt into Redis, use the site's existing `redis_cache` with Redis 8 Search supporting `FT.AGGREGATE ADDSCORES` and cursors:
 
@@ -76,7 +66,7 @@ Keep the scheduler and long workers running. Indexing happens after database com
 
 One image supports separate `backend` (default), `frontend`, `websocket`, `scheduler`, `worker-short`, `worker-default` and `worker-long` containers. Other commands are passed through, for example `bench --site example.com migrate`. Run as the included non-root `frappe` user. Use persistent volumes for `/home/frappe/frappe-bench/sites` and `/home/frappe/frappe-bench/logs`; do not mount a separate assets volume, because image assets must match application code. All service roles must use the same image digest.
 
-Classic prints, report exports and Print Designer use the distribution-maintained Chromium. The image removes pdfkit and wkhtmltopdf. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
+Classic prints, report exports and Print Designer use the distribution-maintained Chromium. The application overlay replaces pdfkit calls with the sandboxed Chromium renderer. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
 
 Containers that render PDFs require Linux user namespaces and the supplied `resources/chromium-seccomp.json` profile, with `cap_drop: [ALL]`, `no-new-privileges:true`, and `init: true` (see `tests/compose.yaml`). The profile derives from [Playwright's Docker profile](https://github.com/microsoft/playwright/blob/v1.64.0/utils/docker/seccomp_profile.json), adding `chroot` so Chromium can isolate itself inside its user namespace without host capabilities. Configure the profile on the Docker host; it cannot be enabled from inside the image. Hosts that prohibit unprivileged user namespaces must receive a narrowly scoped administrator policy change before running this image. The renderer fails closed; do not disable the sandbox, use privileged containers or grant `SYS_ADMIN`.
 
@@ -86,26 +76,6 @@ Helpdesk search requires Redis Search commands. The test harness uses Redis 8 wi
 
 MariaDB/Redis are external services. Create a site and configure `db_host`, `redis_cache`, `redis_queue` and `redis_socketio` in the shared site configuration before starting application roles. Set `webserver_host` to the backend service and `webserver_port` to 8000 so realtime authentication can reach it. The frontend accepts `BACKEND` (default `backend:8000`), `SOCKETIO` (default `websocket:9000`) and `FRAPPE_SITE_NAME_HEADER` (default HTTP host). Internal ports are 8000, 8080 and 9000. Supply deployment-specific health checks for each role; a single image health check cannot describe all roles. `tests/compose.yaml` is a disposable test harness, not a production deployment.
 
-## Redis HTTP cache
-
-Set `HTTP_REDIS_CACHE_ACTIVE=true` on the **frontend** role to enable Redis-backed HTTP caching. It is disabled by default. The connection is selected per known site: `HTTP_REDIS_CACHE_URL`, then the site's `redis_cache`, then `common_site_config.json`'s `redis_cache`. Site directories and configuration are read at frontend startup; restart the frontend after changing them. Redis passwords are kept in a mode-0600 runtime file and are not written into Nginx directives or logs. `rediss://` requires a certificate trusted by the system CA bundle; certificate verification cannot be disabled.
-
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `HTTP_REDIS_CACHE_ACTIVE` | `false` | Enable HTTP caching |
-| `HTTP_REDIS_CACHE_URL` | site/global configuration | Optional `redis://` or `rediss://` connection, including ACL credentials/database |
-| `HTTP_REDIS_CACHE_STATIC_TTL` | `86400` | Public static file lifetime, seconds (maximum 30 days) |
-| `HTTP_REDIS_CACHE_PUBLIC_TTL` | `60` | Maximum anonymous public response lifetime, seconds (maximum 1 hour) |
-| `HTTP_REDIS_CACHE_MAX_BYTES` | `16777216` | Maximum cached response size (maximum 64 MiB) |
-| `HTTP_REDIS_CACHE_TIMEOUT_MS` | `200` | Redis operation timeout |
-| `HTTP_REDIS_CACHE_POOL_SIZE` | `10` | Redis connections per worker/site |
-| `HTTP_REDIS_CACHE_PREFIX` | `frappe-http` | Separate HTTP key namespace |
-| `HTTP_REDIS_CACHE_GENERATION` | `1` | Increment and restart to invalidate existing HTTP entries |
-
-Public assets and files can return Redis hits even with browser hard-refresh headers. Other responses are cached only for anonymous GET requests with explicit `Cache-Control: public` and a positive lifetime. Authorization, cookies, private/no-store/no-cache responses, Set-Cookie, unsupported Vary, API, login and protected routes bypass shared caching. Range and HEAD requests use normal handling. Keys separate sites, hosts, schemes, languages, queries and image builds. `X-HTTP-Redis-Cache` reports `HIT`, `MISS` or `BYPASS`. Redis failures fall back to normal file/upstream service.
-
-Changed or deleted public files can remain cached until their TTL expires. Bump the generation to invalidate them immediately; hard refresh intentionally does not purge static entries. No `FLUSHDB`, Redis eviction-policy change or application/session-cache mutation is performed. Account for HTTP objects in Redis capacity planning. Responses above the size limit remain uncached. Nginx's Debian Lua/srcache modules and the locked official Redis Lua client are included in the image's security checks.
-
 ## Local verification
 
 Requires Python 3.14, Docker with Buildx/Compose, network access and sufficient disk space for the multi-app build. Set `GITHUB_TOKEN` in the process environment to avoid unauthenticated API limits. It is used only by the resolver, never passed into the container build. Optionally set `BUILD_DIR` to an absolute output directory.
@@ -113,8 +83,10 @@ Requires Python 3.14, Docker with Buildx/Compose, network access and sufficient 
 ```sh
 python -m pip install -r requirements-ci.txt
 python -m unittest discover -s tests -v
+python scripts/pipeline.py prepare-base
+python scripts/pipeline.py scan-base
+# The application resolver uses the approved manifest produced by the base workflow.
 python scripts/resolve.py
-bash scripts/base-image.sh # GHCR_USER and GHCR_TOKEN must be set
 python scripts/pipeline.py build
 python scripts/pipeline.py integration
 python scripts/pipeline.py scan

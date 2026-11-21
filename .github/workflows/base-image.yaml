@@ -2,17 +2,6 @@ name: ERPNext base images
 
 on:
   workflow_dispatch:
-    inputs:
-      rebuild:
-        description: 'Build/rebuild the base (disabled: verify selected ready images only)'
-        type: boolean
-        default: false
-        required: true
-      refresh_bootstrap:
-        description: 'Refresh pip/npm on selected ready images without OS compilation'
-        type: boolean
-        default: false
-        required: true
 
 permissions:
   contents: read
@@ -31,7 +20,6 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write
-      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,15 +31,11 @@ jobs:
         run: |
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
-          bash -n scripts/base-image.sh resources/start.sh resources/nginx-entrypoint.sh
-      - name: Build or reuse GHCR base images
+          bash -n resources/start.sh
+      - name: Resolve official Frappe images
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          GHCR_TOKEN: ${{ github.token }}
-          GHCR_USER: ${{ github.actor }}
-          BASE_REBUILD: ${{ inputs.rebuild }}
-          BASE_REFRESH: ${{ inputs.refresh_bootstrap }}
-        run: bash scripts/base-image.sh
+        run: python scripts/pipeline.py prepare-base
       - name: Verify base images with the shared security gate
         run: python scripts/pipeline.py scan-base
       - name: Select verified immutable base manifest
@@ -67,12 +51,8 @@ jobs:
           include-hidden-files: true
           path: |
             .build/lock.json
-            .build/mariadb-keyring.asc
-            .build/redis.lua
             .build/base-images.json
-            .build/base-config.json
             .build/chromium*.json
-            .build/base/
             .build/resolve.log
             .build/*-reports/*.json
           retention-days: 14
