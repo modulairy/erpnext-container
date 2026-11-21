@@ -105,8 +105,12 @@ def candidate(app, ref, kind):
     meta = tomllib.loads(source(app, sha, 'pyproject.toml'))
     hooks = source(app, sha, f'{app}/hooks.py', optional=True)
     required = literal(hooks, 'required_apps', [])
-    if not isinstance(required, list) or any(a not in APPS for a in required):
+    if not isinstance(required, list) or any(
+        not isinstance(name, str) or name.removeprefix('frappe/') not in APPS
+        for name in required
+    ):
         raise ValueError(f'{app}: undeclared app dependency {required}')
+    required = [name.removeprefix('frappe/') for name in required]
     version = literal(source(app, sha, f'{app}/__init__.py'), '__version__')
     if not version:
         raise ValueError(f'{app}: missing version')
@@ -417,3 +421,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

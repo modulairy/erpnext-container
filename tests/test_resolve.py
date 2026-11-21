@@ -165,6 +165,24 @@ class ResolverTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'undeclared app dependency'):
                 resolve.candidate('crm', 'v1.0.0', 'release')
 
+    def test_qualified_helpdesk_dependency_is_installed_first(self):
+        resolve.candidate.cache_clear()
+        self.addCleanup(resolve.candidate.cache_clear)
+        with patch.object(resolve, 'api', return_value={'sha': 'a' * 40}), \
+             patch.object(resolve, 'source', side_effect=[
+                 '[project]\nrequires-python=">=3.14"',
+                 'required_apps = ["frappe/telephony"]',
+                 '__version__ = "16.2.1"',
+                 None, None,
+             ]):
+            helpdesk = resolve.candidate('helpdesk', 'v16.2.1', 'release')
+
+        self.assertEqual(helpdesk['required_apps'], ['telephony'])
+        self.assertEqual(
+            [app['name'] for app in resolve.install_order([helpdesk, row('telephony', '0.0.1')])],
+            ['telephony', 'helpdesk'],
+        )
+
     def test_release_source_version_mismatch_blocks(self):
         resolve.candidate.cache_clear()
         with patch.object(resolve, 'api', return_value={'sha': 'a'*40}), \
@@ -176,3 +194,4 @@ class ResolverTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
