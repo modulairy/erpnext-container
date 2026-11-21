@@ -83,7 +83,7 @@ def base():
     shutil.copyfile(OUT/'mariadb-keyring.asc', context/'mariadb-keyring.asc')
     images, rebuilt = {}, []
     force = '--rebuild' in sys.argv[2:]
-    # Build builder first so the runtime target reuses the expensive shared layers.
+    # The builder consumes the reviewed Chromium installation from the runtime stage.
     for kind in ('builder', 'runtime'):
         tag = f'{BASE_IMAGE}:{kind}-{key}'
         digest = None if force else registry_digest(tag)
@@ -93,8 +93,6 @@ def base():
                     '--target', kind+'-base', '--tag', tag,
                     '--label', 'io.modulairy.erpnext.base-key='+key,
                     '--metadata-file', str(context/(kind+'-metadata.json'))]
-            if force and kind == 'builder':
-                args += ['--no-cache']
             for name, value in (('PYTHON_IMAGE', lock['python_image']),
                                 ('NODE_IMAGE', lock['node_image']), ('YARN_VERSION', lock['yarn'])):
                 args += ['--build-arg', name+'='+value]
@@ -339,13 +337,13 @@ def scan_chromium(lock, cache):
     return {'accepted': [], 'blocking': reports['chromium'], 'advisory': [], 'verified_fixed': []}
 
 def smoke_base(image, kind):
-    # These images stop before Bench, and compilers belong only to the builder.
+    # The upstream builder ships Bench. The runtime base stops before Bench.
     check = ("import importlib.util,shutil; from pathlib import Path; "
-             "assert importlib.util.find_spec('bench') is None; "
              "assert Path('/opt/os-backports/provenance.json').is_file(); "
              "assert shutil.which('node'); assert shutil.which('chromium-headless-shell'); ")
-    check += ("assert all(shutil.which(x) for x in ('gcc','npm','yarn'))"
+    check += ("assert all(shutil.which(x) for x in ('bench','gcc','npm','yarn'))"
               if kind == 'builder' else
+              "assert importlib.util.find_spec('bench') is None; "
               "assert not any(shutil.which(x) for x in ('gcc','npm','yarn'))")
     run(['docker', 'run', '--rm', '--entrypoint', 'python', image, '-c', check])
 
@@ -555,3 +553,4 @@ def scan_with_cache(cache, stage='runtime'):
 if __name__ == '__main__':
     os.chdir(ROOT)
     {'config': config, 'base': base, 'build': build, 'integration': integration, 'scan': scan, 'scan-base': scan_base, 'prepare-base': prepare_base, 'refresh-base': refresh_base}[sys.argv[1]]()
+
