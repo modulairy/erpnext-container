@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+ARG FRAPPE_IMAGE=frappe/base:version-16@sha256:b8fcea788326f88d95646fcf89f3b8311bcb00944b1adeb7936603bb58301a12
+FROM ${FRAPPE_IMAGE}
+USER root
+COPY scripts/chromium.py resources/chromium.json /opt/browser-build/
+RUN if ! ldconfig -p | grep -q 'libatk-bridge-2.0.so.0'; then \
+      apt-get update \
+      && apt-get install -y --no-remove --no-upgrade --no-install-recommends libatk-bridge2.0-0t64=2.56.2-1+deb13u2 \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi \
+    && dpkg --purge chromium-headless-shell chromium-common \
+    && python /opt/browser-build/chromium.py \
+    && rm -rf /opt/browser-build
+USER frappe

@@ -18,7 +18,7 @@ def component(chrome):
 
 
 def install():
-    chrome = json.loads(Path('/opt/build/lock.json').read_text())['chromium']
+    chrome = json.loads(Path(__file__).with_name('chromium.json').read_text())
     version = chrome['version']
     if not re.fullmatch(r'\d+\.\d+\.\d+\.\d+', version):
         raise ValueError('Invalid Chromium version')

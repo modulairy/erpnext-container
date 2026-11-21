@@ -18,9 +18,10 @@ class GateTests(unittest.TestCase):
             self.assertEqual(len(assess_report(changed,[self.key])['blocking']),1)
     def test_service_advisory_does_not_exempt_secrets(self):
         self.data['Results'][0]['Secrets']=[{'Severity':'CRITICAL'}]
+        self.data['Results'][0]['Misconfigurations']=[{'Severity':'HIGH','Status':'FAIL'}]
         result=assess_report(self.data,advisory=True)
         self.assertEqual(len(result['advisory']),1)
-        self.assertEqual(len(result['blocking']),1)
+        self.assertEqual(len(result['blocking']),2)
     def test_invalid_report_fails(self):
         for report in ({},{'SchemaVersion':1,'Results':[]},{'SchemaVersion':2}):
             with self.assertRaises(ValueError): assess_report(report)
