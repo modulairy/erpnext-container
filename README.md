@@ -47,7 +47,7 @@ The runtime uses a version/hash-pinned official Chrome for Testing headless shel
 
 ## Shared base images
 
-`Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Both stop before Bench installation. Runtime contains Python, Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder adds npm/Yarn, compilers and development libraries; these tools do not enter the final application image.
+`Containerfile.base` publishes two Linux amd64 targets to `ghcr.io/modulairy/erpnext-base`: `runtime-<input-hash>` and `builder-<input-hash>`. Runtime starts from the official Python slim image and contains Node, Chromium, nginx, the MariaDB client, curl and reviewed OS backports. Builder starts from a digest-pinned official Frappe build image with matching Python and Node versions. Its compilers and package managers stay in the build stages.
 
 **Actions > ERPNext base images > Run workflow** on `main` is the only way to create or rebuild the base. Leave `rebuild` disabled to verify and select the exact ready digests already recorded in the manifest, with no runtime resolution or compilation; enable it explicitly to resolve new runtime inputs and rebuild. Both base images must pass native smoke checks and the same HIGH/CRITICAL security gate, approved exact exceptions and verified-source rules used by applications. Raw reports are retained. The owner-approved exact 68 build-only records in `security-builder-advisories.json` are advisory only for the reviewed builder parent, package versions and vulnerability IDs; unmatched findings and secrets block. Runtime/Frappe use the same production gate without these builder advisories. CVE-2025-47273 is classified as not affected only after the reviewed official pip wheel and installed files match and the vulnerable setuptools module is absent.
 
@@ -121,3 +121,4 @@ python scripts/pipeline.py scan
 ```
 
 Container layout follows the official [Frappe Docker](https://github.com/frappe/frappe_docker) approach. Upstream application licenses remain applicable to their bundled sources.
+
