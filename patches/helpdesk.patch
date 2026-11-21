@@ -911,4 +911,3 @@
 +        frappe.delete_doc("HD Ticket", ticket.name, force=True)
 +        backend.remove_doc("HD Ticket", ticket.name)
 +        self.assertEqual(backend.search("replacement" + token)["results"], [])
-
