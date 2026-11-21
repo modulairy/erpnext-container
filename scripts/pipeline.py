@@ -268,7 +268,7 @@ def scan_with_cache(cache):
     lock = load()
     trivy = ['docker', 'run', '--rm', '-v', f'{OUT}:/scan', '-v', f'{ROOT}:/source:ro',
              '-v', f'{cache}:/root/.cache/trivy',
-             lock['trivy_image']]
+             lock['trivy_image'], '--timeout', '15m']
     run(trivy+['image', '--input', '/scan/image.tar', '--format', 'cyclonedx',
                '--output', '/scan/sbom.cdx.json'])
     checks = [
