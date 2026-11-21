@@ -12,8 +12,10 @@ import pipeline
 
 
 def approved():
-    return {'schema': 3,
-            'verification_inputs': {k: 'locked' for k in ('trivy_image','grype_image','mariadb_image','redis_image')}, 'images': {kind: base_manifest.OFFICIAL_IMAGES[kind]+':version-16@sha256:'+'a'*64
+    return {'schema': 4,
+            'verification_inputs': {k: 'locked' for k in ('trivy_image','grype_image','mariadb_image','redis_image')},
+            'images': {kind: base_manifest.PUBLISHED_IMAGE+'@sha256:'+'a'*64 for kind in ('runtime', 'builder')},
+            'parents': {kind: base_manifest.OFFICIAL_IMAGES[kind]+':version-16@sha256:'+'a'*64
                                     for kind in ('runtime', 'builder')},
             'inputs': {**{name: name+'-locked' for name in base_manifest.BASE_FIELDS},
                        'python': '3.14.10', 'node': '24.22.2'},
@@ -81,6 +83,25 @@ class ManualBaseTests(unittest.TestCase):
 
     def test_base_only_accepts_the_official_repo_for_each_stage(self):
         data = approved()
-        data['images']['runtime'] = data['images']['builder']
+        data['parents']['runtime'] = data['parents']['builder']
         with self.assertRaisesRegex(ValueError, 'official Frappe'):
             base_manifest.validate(data)
+
+    def test_chrome_base_rejects_unrelated_package_changes(self):
+        before = {'chromium-headless-shell': '156', 'chromium-common': '156', 'git': '1'}
+        after = {'libatk-bridge2.0-0t64': '2.56.2-1+deb13u2', 'git': '1'}
+        pipeline.verify_chrome_package_delta(before, after)
+        with self.assertRaisesRegex(ValueError, 'Unexpected Debian package'):
+            pipeline.verify_chrome_package_delta(before, {**after, 'git': '2'})
+
+    def test_local_base_cannot_be_published_without_passing_scans(self):
+        data = approved()
+        data['images'] = dict(base_manifest.LOCAL_IMAGES)
+        data.pop('security')
+        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'modulairy/erpnext-container'}
+        with tempfile.TemporaryDirectory() as directory, patch.object(pipeline, 'OUT', Path(directory)), \
+             patch.dict(pipeline.os.environ, env), patch.object(pipeline, 'run') as docker:
+            (Path(directory)/'base-images.json').write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, 'pass both scans'):
+                pipeline.publish_base()
+            docker.assert_not_called()

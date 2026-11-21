@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,12 +33,22 @@ jobs:
           python -m pip install -r requirements-ci.txt
           python -m unittest discover -s tests -v
           bash -n resources/start.sh
-      - name: Resolve official Frappe images
+      - name: Build official Frappe bases with pinned Chrome
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/pipeline.py prepare-base
       - name: Verify base images with the shared security gate
         run: python scripts/pipeline.py scan-base
+      - name: Publish the scanned base images
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          python scripts/pipeline.py publish-base
       - name: Select verified immutable base manifest
         if: ${{ github.ref == 'refs/heads/main' }}
         env:

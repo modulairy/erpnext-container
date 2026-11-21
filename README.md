@@ -41,11 +41,11 @@ After a successful push and provenance/SBOM attestations, the publish job create
 
 **Actions > Frappe framework > Run workflow** builds `ghcr.io/modulairy/frappe:<Frappe-release-tag>` with Bench and Frappe only, using the approved ready base images. Enable `publish` on `main` to publish the tested digest and a `frappe-<Frappe-release-tag>` GitHub Release. Rebuilds from another revision append the short commit SHA to the source tag. This release does not replace the latest ERPNext release.
 
-The browser comes from the official Frappe runtime. The product scan still requires its coverage control and blocks high and critical findings for the selected version.
+The bases replace Debian Chromium with the SHA-256-pinned Google Chrome Headless Shell. The product scan requires its coverage control and blocks high and critical findings for the installed version.
 
 ## Official base images
 
-The manual base workflow resolves Linux amd64 digests of `frappe/build:version-16` and `frappe/base:version-16`. It checks that their runtime versions match, scans both images and records their inventories. Only an approved result can update the base manifest on main. Frappe and ERPNext consume the approved digests and keep the application source patches.
+The manual base workflow resolves Linux amd64 digests of `frappe/build:version-16` and `frappe/base:version-16`. It replaces the browser and checks the exact Debian package changes, then scans both images and records their inventories. On main, it publishes the exact scanned images and updates the base manifest only after both scans pass. Frappe and ERPNext consume those approved digests.
 
 ## Reviewed Frappe 16 backports
 
@@ -66,7 +66,7 @@ Keep the scheduler and long workers running. Indexing happens after database com
 
 One image supports separate `backend` (default), `frontend`, `websocket`, `scheduler`, `worker-short`, `worker-default` and `worker-long` containers. Other commands are passed through, for example `bench --site example.com migrate`. Run as the included non-root `frappe` user. Use persistent volumes for `/home/frappe/frappe-bench/sites` and `/home/frappe/frappe-bench/logs`; do not mount a separate assets volume, because image assets must match application code. All service roles must use the same image digest.
 
-Classic prints, report exports and Print Designer use the distribution-maintained Chromium. The application overlay replaces pdfkit calls with the sandboxed Chromium renderer. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
+Classic prints, report exports and Print Designer use Chrome Headless Shell. The application overlay replaces pdfkit calls with the sandboxed renderer. PDF jobs run as `frappe`, use private temporary directories under `/tmp/frappe-pdf`, and terminate after 90 seconds. Generated invoice/report PDFs and renderer sandbox evidence are retained in the Actions reports.
 
 Containers that render PDFs require Linux user namespaces and the supplied `resources/chromium-seccomp.json` profile, with `cap_drop: [ALL]`, `no-new-privileges:true`, and `init: true` (see `tests/compose.yaml`). The profile derives from [Playwright's Docker profile](https://github.com/microsoft/playwright/blob/v1.64.0/utils/docker/seccomp_profile.json), adding `chroot` so Chromium can isolate itself inside its user namespace without host capabilities. Configure the profile on the Docker host; it cannot be enabled from inside the image. Hosts that prohibit unprivileged user namespaces must receive a narrowly scoped administrator policy change before running this image. The renderer fails closed; do not disable the sandbox, use privileged containers or grant `SYS_ADMIN`.
 

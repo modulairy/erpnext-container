@@ -9,21 +9,30 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 BASE_FIELDS = ('python', 'node', 'bench', 'chromium_version')
 OFFICIAL_IMAGES = {'runtime': 'frappe/base', 'builder': 'frappe/build'}
+LOCAL_IMAGES = {kind: 'erpnext-chrome-base:'+kind for kind in OFFICIAL_IMAGES}
+PUBLISHED_IMAGE = 'ghcr.io/modulairy/erpnext-base'
 MANIFEST = 'resources/base-images.json'
 
 
 def policy_hash(root=ROOT):
     files = {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
-             for name in ('security-exceptions.json', 'security-policy.json', 'scripts/pipeline.py')}
+             for name in ('security-exceptions.json', 'security-policy.json', 'scripts/pipeline.py',
+                          'Containerfile.chrome', 'scripts/chromium.py', 'resources/chromium.json')}
     return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
 
 def validate(data, require_verified=True):
-    if data.get('schema') != 3 or set(data.get('images', {})) != {'runtime', 'builder'}:
+    if data.get('schema') != 4 or set(data.get('images', {})) != set(OFFICIAL_IMAGES):
         raise ValueError('Missing approved base manifest; run the base Action manually')
-    for kind, image in data['images'].items():
+    if set(data.get('parents', {})) != set(OFFICIAL_IMAGES):
+        raise ValueError('Missing official Frappe parent digests')
+    for kind, image in data['parents'].items():
         if not re.fullmatch(re.escape(OFFICIAL_IMAGES[kind])+r':version-16@sha256:[0-9a-f]{64}', image):
-            raise ValueError('Approved bases must be immutable official Frappe images')
+            raise ValueError('Parents must be immutable official Frappe images')
+    if require_verified or data['images'] != LOCAL_IMAGES:
+        for image in data['images'].values():
+            if not re.fullmatch(re.escape(PUBLISHED_IMAGE)+r'@sha256:[0-9a-f]{64}', image):
+                raise ValueError('Approved bases must be immutable published image digests')
     if set(data.get('inputs', {})) != set(BASE_FIELDS):
         raise ValueError('Missing locked base runtime inputs')
     if require_verified:

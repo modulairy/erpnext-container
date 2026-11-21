@@ -26,7 +26,7 @@ def load():
 
 
 
-from base_manifest import OFFICIAL_IMAGES, validate
+from base_manifest import LOCAL_IMAGES, OFFICIAL_IMAGES, PUBLISHED_IMAGE, policy_hash, validate
 
 
 def image_output(image, executable, *args):
@@ -41,27 +41,46 @@ def versions(image):
         'python': image_output(image, 'python', '--version').removeprefix('Python '),
         'node': image_output(image, 'node', '--version').removeprefix('v'),
         'bench': image_output(image, 'bench', '--version'),
-        'chromium_version': image_output(image, 'chromium-headless-shell', '--version').split()[1],
+        'chromium_version': re.search(r'\b\d+\.\d+\.\d+\.\d+\b',
+                                      image_output(image, 'chromium-headless-shell', '--version'))[0],
     }
+
+
+def verify_chrome_package_delta(before, after):
+    expected = dict(before)
+    for package in ('chromium-headless-shell', 'chromium-common'):
+        expected.pop(package)
+    expected.setdefault('libatk-bridge2.0-0t64', '2.56.2-1+deb13u2')
+    if after != expected:
+        raise ValueError('Unexpected Debian package change in Chrome base')
 
 
 def prepare_base():
     from resolve import image_digest, request, scanner_version
-    images = {}
+    parents = {}
     for kind, repository in OFFICIAL_IMAGES.items():
         tag = repository + ':version-16'
         details = json.loads(request('https://hub.docker.com/v2/repositories/' + repository + '/tags/version-16'))
         [digest] = [row['digest'] for row in details['images']
                     if row['os'] == 'linux' and row['architecture'] == 'amd64']
-        images[kind] = tag+'@'+digest
+        parents[kind] = tag+'@'+digest
+    chrome = json.loads((ROOT/'resources/chromium.json').read_text())
+    for kind, parent in parents.items():
+        image = LOCAL_IMAGES[kind]
+        run(['docker', 'buildx', 'build', '--platform', 'linux/amd64', '--load',
+             '--file', 'Containerfile.chrome', '--build-arg', 'FRAPPE_IMAGE='+parent,
+             '--tag', image, '.'])
+        verify_chrome_package_delta(package_versions(parent), package_versions(image))
     verification = {'trivy_image': image_digest('aquasec/trivy:'+scanner_version().lstrip('v')),
                     'grype_image': image_digest('anchore/grype:v0.121.3'),
                     'mariadb_image': image_digest('mariadb:11.8'),
                     'redis_image': image_digest('redis:8-alpine')}
-    metadata = {'schema': 3, 'images': images, 'inputs': versions(images['runtime']),
+    metadata = {'schema': 4, 'images': dict(LOCAL_IMAGES), 'parents': parents,
+                'inputs': versions(LOCAL_IMAGES['runtime']),
                 'verification_inputs': verification}
     validate(metadata, require_verified=False)
-    if versions(images['builder']) != metadata['inputs']:
+    if (versions(LOCAL_IMAGES['builder']) != metadata['inputs']
+            or metadata['inputs']['chromium_version'] != chrome['version']):
         raise ValueError('Official Frappe builder and runtime versions differ')
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT/'base-images.json').write_text(json.dumps(metadata, indent=2)+'\n')
@@ -115,10 +134,13 @@ def build():
     run(['docker', 'save', '--output', str(OUT/'image.tar'), IMAGE])
 
 
-def capture_installed(image):
+def package_versions(image):
     query = image_output(image, 'dpkg-query', '-W', '-f=${Package}\t${Version}\n')
-    versions = dict(line.split('\t', 1) for line in query.splitlines())
-    (OUT/'installed-packages.json').write_text(json.dumps({'versions': versions}, indent=2)+'\n')
+    return dict(line.split('\t', 1) for line in query.splitlines())
+
+
+def capture_installed(image):
+    (OUT/'installed-packages.json').write_text(json.dumps({'versions': package_versions(image)}, indent=2)+'\n')
 
 
 def integration():
@@ -220,21 +242,23 @@ def scan_chromium(lock, cache):
 
 def scan_base():
     global OUT
-    from base_manifest import validate, policy_hash
     root = OUT
     lock = load()
     metadata = validate(json.loads((OUT/'base-images.json').read_text()), require_verified=False)
     cache = 'base-scan-'+secrets.token_hex(4)
     run(['docker', 'volume', 'create', cache])
-    reports, failed = {}, []
+    reports, failed, image_ids = {}, [], {}
     try:
         for kind in ('runtime', 'builder'):
             image = metadata['images'][kind]
+            image_ids[kind] = image_id(image)
+            if versions(image) != metadata['inputs']:
+                raise ValueError('Base image versions differ from the resolved inputs')
             OUT = root/(kind+'-reports')
             OUT.mkdir(exist_ok=True)
             (OUT/'lock.json').write_text(json.dumps(lock, indent=2)+'\n')
             capture_installed(image)
-            run(['docker', 'save', '--output', str(OUT/'image.tar'), image])
+            run(['docker', 'save', '--output', str(OUT/'image.tar'), image_ids[kind]])
             try:
                 scan_with_cache(cache)
             except RuntimeError:
@@ -248,11 +272,43 @@ def scan_base():
         raise RuntimeError('Base security gate failed: '+', '.join(failed))
     metadata['security'] = {'status': 'passed', 'severity': ['HIGH', 'CRITICAL'],
                             'policy_sha256': policy_hash(), 'reports': reports,
+                            'image_ids': image_ids,
                             'trivy_image': lock['trivy_image'], 'grype_image': lock['grype_image']}
     metadata['source_revision'] = os.environ['GITHUB_SHA']
     metadata['evidence'] = ('https://github.com/'+os.environ['GITHUB_REPOSITORY']+
                             '/actions/runs/'+os.environ['GITHUB_RUN_ID'])
     (OUT/'base-images.json').write_text(json.dumps(metadata, indent=2)+'\n')
+
+
+def image_id(image):
+    return subprocess.check_output(['docker', 'image', 'inspect', image, '--format', '{{.Id}}'],
+                                   text=True).strip()
+
+
+def publish_base():
+    if os.environ.get('GITHUB_REF') != 'refs/heads/main' or os.environ.get('GITHUB_REPOSITORY') != 'modulairy/erpnext-container':
+        raise ValueError('Base publication requires main in the owning repository')
+    path = OUT/'base-images.json'
+    metadata = validate(json.loads(path.read_text()), require_verified=False)
+    security = metadata.get('security', {})
+    if (metadata['images'] != LOCAL_IMAGES or security.get('status') != 'passed'
+            or security.get('policy_sha256') != policy_hash()
+            or set(security.get('reports', {})) != set(LOCAL_IMAGES)
+            or metadata.get('source_revision') != os.environ['GITHUB_SHA']):
+        raise ValueError('Base publication requires this run to pass both scans')
+    images = {}
+    for kind, image in LOCAL_IMAGES.items():
+        tested = security['image_ids'][kind]
+        if image_id(image) != tested or not re.fullmatch(r'sha256:[a-f0-9]{64}', tested):
+            raise ValueError('Local base image differs from the scanned image')
+        tag = PUBLISHED_IMAGE+':'+kind+'-'+tested.removeprefix('sha256:')
+        run(['docker', 'tag', tested, tag])
+        output = subprocess.check_output(['docker', 'push', tag], text=True)
+        digest, = re.findall(r'digest: (sha256:[a-f0-9]{64})\s+size:', output)
+        images[kind] = PUBLISHED_IMAGE+'@'+digest
+    metadata['images'] = images
+    validate(metadata)
+    path.write_text(json.dumps(metadata, indent=2)+'\n')
 
 
 def scan():
@@ -271,6 +327,17 @@ def scan_with_cache(cache):
              lock['trivy_image'], '--timeout', '15m']
     run(trivy+['image', '--input', '/scan/image.tar', '--format', 'cyclonedx',
                '--output', '/scan/sbom.cdx.json'])
+    from chromium import component
+    sbom_path = OUT/'sbom.cdx.json'
+    sbom = json.loads(sbom_path.read_text(encoding='utf-8'))
+    chrome = json.loads((ROOT/'resources/chromium.json').read_text())
+    if chrome['version'] != lock['chromium_version']:
+        raise ValueError('Chrome SBOM version differs from the scanned base')
+    chrome_component = component(chrome)
+    components = sbom.setdefault('components', [])
+    if not any(item.get('purl') == chrome_component['purl'] for item in components):
+        components.append(chrome_component)
+    sbom_path.write_text(json.dumps(sbom, indent=2)+'\n', encoding='utf-8')
     checks = [
         ['image', '--input', '/scan/image.tar', '--scanners', 'vuln,secret', '--severity', 'HIGH,CRITICAL',
          '--exit-code', '0', '--format', 'json', '--output', '/scan/vulnerabilities.json'],
@@ -342,4 +409,4 @@ def scan_with_cache(cache):
 if __name__ == '__main__':
     os.chdir(ROOT)
     {'build': build, 'integration': integration, 'scan': scan,
-     'scan-base': scan_base, 'prepare-base': prepare_base}[sys.argv[1]]()
+     'scan-base': scan_base, 'prepare-base': prepare_base, 'publish-base': publish_base}[sys.argv[1]]()
