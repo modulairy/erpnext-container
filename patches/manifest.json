@@ -19,7 +19,7 @@
     "upstream_pr": "https://github.com/frappe/helpdesk/pull/3914",
     "upstream_revision": "e326986329341c803dd4bf094322670ad0591ca5",
     "patch": "helpdesk.patch",
-    "sha256": "e737c937228ac1108ad0a44e01a12f891a28db8bbc8031e553144011cadb1485",
+    "sha256": "1ec92ce244ced694456d426c0d41a60b399c2f72a2c1dc814d41e90e1c2db687",
     "expected": {
       "helpdesk/hooks.py": "e6bf772b1153e47cffb04c8bfc1c26e8d7b9312de5964ed126a79b7dd4ded902",
       "helpdesk/api/search.py": "b47001abb46b0bcfe4c9e92e89dcf929b63faafefc4a3aa8f7732c4060c16f93",
@@ -28,7 +28,7 @@
       "helpdesk/tests/test_ticket_search_backend.py": null
     },
     "output": {
-      "helpdesk/hooks.py": "c2524b6af9733719abcd21b550d8dabec6edc681c303beebff4b32ebdc561ace",
+      "helpdesk/hooks.py": "b5fea2b786a52418b0948a13d1adefead6f58b8d277f0e131fb8b6b73641f2c5",
       "helpdesk/api/search.py": "df772bdcdc817da6b5c19244f4fcf560b02d3274aa453734587872f573a3bf4b",
       "helpdesk/ticket_search.py": "d021457df1503d432f2a586a7164741ed38deb6cc2a015b03e6e32d435510c11",
       "helpdesk/search_redis.py": "39248cf5d0032d9cc3527805082e7ae3ad4440b603f57e7de3727059b637c875",

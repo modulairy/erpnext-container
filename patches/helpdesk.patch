@@ -1,6 +1,6 @@
 --- a/helpdesk/hooks.py
 +++ b/helpdesk/hooks.py
-@@ -29,19 +29,19 @@
+@@ -29,19 +29,18 @@
  after_migrate = [
      "helpdesk.search.build_index_in_background",
      "helpdesk.search.download_corpus",
@@ -13,7 +13,6 @@
 -sqlite_search = [
 -    "helpdesk.search_sqlite.HelpdeskSearch",
 -]
-+persistent_cache_keys = ["search_doc:*", "search_doc_sections:*", "helpdesk_ticket_search:*"]
  
  scheduler_events = {
      "all": [
@@ -23,7 +22,7 @@
      ],
      "daily": [
          "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days"
-@@ -131,6 +131,11 @@
+@@ -131,6 +130,11 @@
  update_website_context = "helpdesk.helpdesk.hooks.studio_app.update_website_context"
  
  doc_events = {
@@ -35,6 +34,15 @@
      "Assignment Rule": {
          "on_trash": "helpdesk.extends.assignment_rule.on_assignment_rule_trash",
          "validate": "helpdesk.extends.assignment_rule.on_assignment_rule_validate",
+@@ -203,7 +207,7 @@
+ }
+ 
+ # The article search index; frappe.clear_cache() would otherwise empty it until the next rebuild
+-persistent_cache_keys = ["search_doc:*", "search_doc_sections:*"]
++persistent_cache_keys = ["search_doc:*", "search_doc_sections:*", "helpdesk_ticket_search:*"]
+ 
+ notification_skip_email_types = [
+     "Reaction",
 --- a/helpdesk/api/search.py
 +++ b/helpdesk/api/search.py
 @@ -32,9 +32,9 @@

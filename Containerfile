@@ -11,9 +11,11 @@ COPY scripts/build.py scripts/security.py scripts/pdf_overlay.py scripts/communi
 COPY patches/ /opt/build/patches/
 COPY resources/chrome_pdf_generator.py resources/pdf_resources.py /opt/build/pdf/
 USER frappe
-RUN python /opt/build/build.py install
+RUN python -m venv /tmp/erpnext-build-env \
+    && /tmp/erpnext-build-env/bin/python -m pip install --no-cache-dir --no-deps packaging==26.3
+RUN /tmp/erpnext-build-env/bin/python /opt/build/build.py install
 FROM dependencies AS builder
-RUN python /opt/build/build.py assets
+RUN /tmp/erpnext-build-env/bin/python /opt/build/build.py assets
 FROM base AS runtime
 ARG ERPNEXT_TAG
 ARG SOURCE_REVISION
@@ -22,6 +24,7 @@ LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-cont
       org.opencontainers.image.revision="${SOURCE_REVISION}"
 COPY --from=builder --chown=frappe:0 /home/frappe/frappe-bench /home/frappe/frappe-bench
 USER root
+RUN dpkg --purge wkhtmltox
 RUN node_bin="$(dirname "$(command -v node)")" \
     && rm -rf "$node_bin/../lib/node_modules" \
     && rm -f "$node_bin/npm" "$node_bin/npx" "$node_bin/yarn" "$node_bin/yarnpkg" "$node_bin/corepack" "$node_bin/pnpm" "$node_bin/pnpx" \
