@@ -1,0 +1,43 @@
+{
+  "schema": 4,
+  "images": {
+    "runtime": "ghcr.io/modulairy/erpnext-base@sha256:4ffd6ab85d4706ae12aeb0222f8f5279a41f15d61fb997e87b33eab169b2afe8",
+    "builder": "ghcr.io/modulairy/erpnext-base@sha256:f31f2b53a7d02f89df66944eb99f1088e4f626d043c7b05a31637ba2cffdbad6"
+  },
+  "parents": {
+    "runtime": "frappe/base:version-16@sha256:b8fcea788326f88d95646fcf89f3b8311bcb00944b1adeb7936603bb58301a12",
+    "builder": "frappe/build:version-16@sha256:0ea1392506828b8deec87c82788ca8936c3203848ecb93901194a5b506a7be46"
+  },
+  "inputs": {
+    "python": "3.14.10",
+    "node": "24.22.3",
+    "bench": "5.31.1",
+    "chromium_version": "158.0.8127.36"
+  },
+  "verification_inputs": {
+    "trivy_image": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "grype_image": "anchore/grype:v0.121.3@sha256:13113eeceab017260370cf540e1d25442c59665fd07d1b09b66d63bb0c282887",
+    "mariadb_image": "mariadb:11.8@sha256:e1d5495f445654134f226f55a41ce0da227116f6f27f283101f405c794d841fc",
+    "redis_image": "redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3"
+  },
+  "security": {
+    "status": "passed",
+    "severity": [
+      "HIGH",
+      "CRITICAL"
+    ],
+    "policy_sha256": "b9ec7846f62da0c4cf75346dfc524cff1d8e522142249a695e3ee2df696b548e",
+    "reports": {
+      "runtime": "86b31f310794b11b6023fdd1b6e8255c6e1264aee92dfa6a89961ea590ba9f77",
+      "builder": "d47e42413fc4d9528cba2e9708e21ef09fc08accc86862e1fc5837149c3fd37a"
+    },
+    "image_ids": {
+      "runtime": "sha256:8fe7c0cc9ab4ce6b1a247909ecd07fbbdccb886c91d3fd8e217b585f05ee0393",
+      "builder": "sha256:41fdf090f0277f053221a62f78740b71b7f481b140ebf1ac328bc9ea76466d0d"
+    },
+    "trivy_image": "aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb",
+    "grype_image": "anchore/grype:v0.121.3@sha256:13113eeceab017260370cf540e1d25442c59665fd07d1b09b66d63bb0c282887"
+  },
+  "source_revision": "4e6452445d1aa33f77277c1fed94462aa066375d",
+  "evidence": "https://github.com/modulairy/erpnext-container/actions/runs/45005125249"
+}
