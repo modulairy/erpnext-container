@@ -24,6 +24,7 @@ LABEL org.opencontainers.image.source="https://github.com/modulairy/erpnext-cont
       org.opencontainers.image.revision="${SOURCE_REVISION}"
 COPY --from=builder --chown=frappe:0 /home/frappe/frappe-bench /home/frappe/frappe-bench
 USER root
+RUN dpkg --purge wkhtmltox
 RUN node_bin="$(dirname "$(command -v node)")" \
     && rm -rf "$node_bin/../lib/node_modules" \
     && rm -f "$node_bin/npm" "$node_bin/npx" "$node_bin/yarn" "$node_bin/yarnpkg" "$node_bin/corepack" "$node_bin/pnpm" "$node_bin/pnpx" \
